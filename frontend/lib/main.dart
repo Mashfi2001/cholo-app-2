@@ -38,12 +38,15 @@ class _DriverRidePageState extends State<DriverRidePage> {
   int? rideId;
   String rideStatus = "NOT_CREATED";
   bool isLoading = false;
+  bool isBookingLoading = false;
   DateTime? selectedDepartureTime;
+  List<Map<String, dynamic>> bookingRequests = [];
 
   LatLng? startLocation;
   LatLng? endLocation;
 
-  final String baseUrl = "http://10.0.2.2:5000/api/rides";
+  final String rideBaseUrl = "http://10.0.2.2:5000/api/rides";
+  final String bookingBaseUrl = "http://10.0.2.2:5000/api/bookings";
 
   bool get canEdit => rideStatus == "NOT_CREATED" || rideStatus == "PLANNED";
   bool get canShowCreate => rideId == null;
