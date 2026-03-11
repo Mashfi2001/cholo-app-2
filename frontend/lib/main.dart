@@ -123,7 +123,7 @@ class _DriverRidePageState extends State<DriverRidePage> {
 
     try {
       final response = await http.post(
-        Uri.parse(baseUrl),
+        Uri.parse(rideBaseUrl),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "driverId": 1,
@@ -160,7 +160,7 @@ class _DriverRidePageState extends State<DriverRidePage> {
 
     try {
       final response = await http.put(
-        Uri.parse("$baseUrl/$rideId/route"),
+        Uri.parse("$rideBaseUrl/$rideId/route"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "origin": originController.text.trim(),
@@ -194,7 +194,7 @@ class _DriverRidePageState extends State<DriverRidePage> {
 
     try {
       final response = await http.put(
-        Uri.parse("$baseUrl/$rideId/start"),
+        Uri.parse("$rideBaseUrl/$rideId/start"),
         headers: {"Content-Type": "application/json"},
       );
 
@@ -242,7 +242,7 @@ class _DriverRidePageState extends State<DriverRidePage> {
 
     try {
       final response = await http.put(
-        Uri.parse("$baseUrl/$rideId/cancel"),
+        Uri.parse("$rideBaseUrl/$rideId/cancel"),
         headers: {"Content-Type": "application/json"},
       );
 
