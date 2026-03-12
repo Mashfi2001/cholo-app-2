@@ -1,4 +1,3 @@
-import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -51,7 +50,8 @@ class _DriverRidePageState extends State<DriverRidePage> {
 
   final String rideBaseUrl = "http://10.0.2.2:5000/api/rides";
   final String bookingBaseUrl = "http://10.0.2.2:5000/api/bookings";
-  final String openRouteServiceApiKey = "PASTE_YOUR_ORS_API_KEY_HERE";
+  final String openRouteServiceApiKey =
+      "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImU0YzRiNTY2MGNjMjRmYjI5ZjE3ZTFiMGFmMGNiZWUzIiwiaCI6Im11cm11cjY0In0=";
 
   bool get canEdit => rideStatus == "NOT_CREATED" || rideStatus == "PLANNED";
   bool get canShowCreate => rideId == null;
@@ -93,6 +93,45 @@ class _DriverRidePageState extends State<DriverRidePage> {
     }
   }
 
+  List<LatLng> decodeEncodedPolyline(String encoded) {
+    List<LatLng> polylineCoordinates = [];
+    int index = 0;
+    int lat = 0;
+    int lng = 0;
+
+    while (index < encoded.length) {
+      int shift = 0;
+      int result = 0;
+
+      while (true) {
+        int byte = encoded.codeUnitAt(index++) - 63;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+        if (byte < 0x20) break;
+      }
+
+      int deltaLat = (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
+      lat += deltaLat;
+
+      shift = 0;
+      result = 0;
+
+      while (true) {
+        int byte = encoded.codeUnitAt(index++) - 63;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+        if (byte < 0x20) break;
+      }
+
+      int deltaLng = (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
+      lng += deltaLng;
+
+      polylineCoordinates.add(LatLng(lat / 1E5, lng / 1E5));
+    }
+
+    return polylineCoordinates;
+  }
+
   Future<void> fetchRealRoute() async {
     if (startLocation == null || endLocation == null) return;
 
@@ -123,13 +162,10 @@ class _DriverRidePageState extends State<DriverRidePage> {
         final encodedGeometry = route["geometry"];
         final summary = route["summary"];
 
-        final polylinePoints = PolylinePoints().decodePolyline(encodedGeometry);
+        final polylinePoints = decodeEncodedPolyline(encodedGeometry);
 
         setState(() {
-          routePoints = polylinePoints
-              .map((point) => LatLng(point.latitude, point.longitude))
-              .toList();
-
+          routePoints = polylinePoints;
           routeDistanceKm = (summary["distance"] ?? 0) / 1000.0;
           routeDurationMin = (summary["duration"] ?? 0) / 60.0;
         });
