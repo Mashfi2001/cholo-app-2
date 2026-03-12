@@ -63,8 +63,14 @@ class _DriverRidePageState extends State<DriverRidePage> {
     setState(() {
       if (startLocation == null) {
         startLocation = point;
+        endLocation = null;
+        routePoints = [];
+        routeDistanceKm = null;
+        routeDurationMin = null;
+
         originController.text =
             "Start: ${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}";
+        destinationController.clear();
       } else if (endLocation == null) {
         endLocation = point;
         destinationController.text =
@@ -72,11 +78,67 @@ class _DriverRidePageState extends State<DriverRidePage> {
       } else {
         startLocation = point;
         endLocation = null;
+        routePoints = [];
+        routeDistanceKm = null;
+        routeDurationMin = null;
+
         originController.text =
             "Start: ${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}";
         destinationController.clear();
       }
     });
+
+    if (startLocation != null && endLocation != null) {
+      fetchRealRoute();
+    }
+  }
+
+  Future<void> fetchRealRoute() async {
+    if (startLocation == null || endLocation == null) return;
+
+    if (openRouteServiceApiKey == "PASTE_YOUR_ORS_API_KEY_HERE") {
+      showMessage("Please add your OpenRouteService API key first");
+      return;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse("https://api.openrouteservice.org/v2/directions/driving-car"),
+        headers: {
+          "Authorization": openRouteServiceApiKey,
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode({
+          "coordinates": [
+            [startLocation!.longitude, startLocation!.latitude],
+            [endLocation!.longitude, endLocation!.latitude],
+          ],
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        final route = data["routes"][0];
+        final encodedGeometry = route["geometry"];
+        final summary = route["summary"];
+
+        final polylinePoints = PolylinePoints().decodePolyline(encodedGeometry);
+
+        setState(() {
+          routePoints = polylinePoints
+              .map((point) => LatLng(point.latitude, point.longitude))
+              .toList();
+
+          routeDistanceKm = (summary["distance"] ?? 0) / 1000.0;
+          routeDurationMin = (summary["duration"] ?? 0) / 60.0;
+        });
+      } else {
+        showMessage("Failed to fetch route");
+      }
+    } catch (e) {
+      showMessage("Could not fetch real route");
+    }
   }
 
   Future<void> pickDepartureDateTime() async {
