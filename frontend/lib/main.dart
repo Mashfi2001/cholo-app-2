@@ -44,6 +44,8 @@ class _DriverRidePageState extends State<DriverRidePage> {
   List<LatLng> routePoints = [];
   double? routeDistanceKm;
   double? routeDurationMin;
+  List<Map<String, dynamic>> searchResults = [];
+  bool isSearching = false;
 
   LatLng? startLocation;
   LatLng? endLocation;
@@ -174,6 +176,44 @@ class _DriverRidePageState extends State<DriverRidePage> {
       }
     } catch (e) {
       showMessage("Could not fetch real route");
+    }
+  }
+
+  Future<void> searchPlaces(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
+        searchResults = [];
+      });
+      return;
+    }
+
+    setState(() {
+      isSearching = true;
+    });
+
+    try {
+      final response = await http.get(
+        Uri.parse(
+          "https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=jsonv2&limit=5",
+        ),
+        headers: {"User-Agent": "com.example.frontend"},
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        setState(() {
+          searchResults = List<Map<String, dynamic>>.from(data);
+        });
+      } else {
+        showMessage("Failed to search places");
+      }
+    } catch (e) {
+      showMessage("Could not search places");
+    } finally {
+      setState(() {
+        isSearching = false;
+      });
     }
   }
 
