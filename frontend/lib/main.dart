@@ -46,6 +46,7 @@ class _DriverRidePageState extends State<DriverRidePage> {
   double? routeDurationMin;
   List<Map<String, dynamic>> searchResults = [];
   bool isSearching = false;
+  final MapController mapController = MapController();
 
   LatLng? startLocation;
   LatLng? endLocation;
@@ -59,39 +60,56 @@ class _DriverRidePageState extends State<DriverRidePage> {
   bool get canShowCreate => rideId == null;
   bool get canShowPlannedActions => rideId != null && rideStatus == "PLANNED";
 
-  void handleMapTap(TapPosition tapPosition, LatLng point) {
+  Future<void> handleMapTap(TapPosition tapPosition, LatLng point) async {
     if (!canEdit || isLoading) return;
 
-    setState(() {
-      if (startLocation == null) {
+    if (startLocation == null) {
+      setState(() {
         startLocation = point;
         endLocation = null;
         routePoints = [];
         routeDistanceKm = null;
         routeDurationMin = null;
-
-        originController.text =
-            "Start: ${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}";
+        originController.text = "Loading place...";
         destinationController.clear();
-      } else if (endLocation == null) {
+      });
+
+      final placeName = await reverseGeocode(point);
+
+      setState(() {
+        originController.text = placeName;
+      });
+    } else if (endLocation == null) {
+      setState(() {
         endLocation = point;
-        destinationController.text =
-            "Destination: ${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}";
-      } else {
+        destinationController.text = "Loading place...";
+      });
+
+      final placeName = await reverseGeocode(point);
+
+      setState(() {
+        destinationController.text = placeName;
+      });
+
+      if (startLocation != null && endLocation != null) {
+        await fetchRealRoute();
+      }
+    } else {
+      setState(() {
         startLocation = point;
         endLocation = null;
         routePoints = [];
         routeDistanceKm = null;
         routeDurationMin = null;
-
-        originController.text =
-            "Start: ${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}";
+        originController.text = "Loading place...";
         destinationController.clear();
-      }
-    });
+      });
 
-    if (startLocation != null && endLocation != null) {
-      fetchRealRoute();
+      final placeName = await reverseGeocode(point);
+
+      setState(() {
+        originController.text = placeName;
+      });
     }
   }
 
@@ -302,8 +320,10 @@ class _DriverRidePageState extends State<DriverRidePage> {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              onTap: () {
+                              onTap: () async {
                                 final selectedPoint = LatLng(lat, lon);
+
+                                Navigator.pop(context);
 
                                 setState(() {
                                   if (isOrigin) {
@@ -318,11 +338,9 @@ class _DriverRidePageState extends State<DriverRidePage> {
                                   }
                                 });
 
-                                Navigator.pop(context);
-
                                 if (startLocation != null &&
                                     endLocation != null) {
-                                  fetchRealRoute();
+                                  await fetchRealRoute();
                                 }
                               },
                             );
@@ -339,6 +357,77 @@ class _DriverRidePageState extends State<DriverRidePage> {
     );
 
     searchResults = [];
+  }
+
+  Future<String> reverseGeocode(LatLng point) async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${point.latitude}&lon=${point.longitude}",
+        ),
+        headers: {"User-Agent": "com.example.frontend"},
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data["display_name"] != null) {
+        return data["display_name"].toString();
+      }
+    } catch (e) {
+      // ignore and fall back
+    }
+
+    return "${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}";
+  }
+
+  Future<void> searchSinglePlaceAndSetMarker(
+    String query,
+    bool isOrigin,
+  ) async {
+    if (query.trim().isEmpty) return;
+
+    try {
+      final response = await http.get(
+        Uri.parse(
+          "https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=jsonv2&limit=1",
+        ),
+        headers: {"User-Agent": "com.example.frontend"},
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data is List && data.isNotEmpty) {
+        final place = data[0];
+        final lat = double.tryParse(place["lat"].toString()) ?? 0.0;
+        final lon = double.tryParse(place["lon"].toString()) ?? 0.0;
+        final displayName = place["display_name"]?.toString() ?? query;
+
+        final selectedPoint = LatLng(lat, lon);
+
+        setState(() {
+          if (isOrigin) {
+            startLocation = selectedPoint;
+            originController.text = displayName;
+            routePoints = [];
+            routeDistanceKm = null;
+            routeDurationMin = null;
+          } else {
+            endLocation = selectedPoint;
+            destinationController.text = displayName;
+          }
+        });
+
+        mapController.move(selectedPoint, 14);
+
+        if (startLocation != null && endLocation != null) {
+          await fetchRealRoute();
+        }
+      } else {
+        showMessage("Place not found");
+      }
+    } catch (e) {
+      showMessage("Could not search place");
+    }
   }
 
   Future<void> pickDepartureDateTime() async {
@@ -762,6 +851,7 @@ class _DriverRidePageState extends State<DriverRidePage> {
                           child: SizedBox(
                             height: 300,
                             child: FlutterMap(
+                              mapController: mapController,
                               options: MapOptions(
                                 initialCenter: const LatLng(23.8103, 90.4125),
                                 initialZoom: 12,
@@ -825,29 +915,25 @@ class _DriverRidePageState extends State<DriverRidePage> {
                         const SizedBox(height: 16),
                         TextField(
                           controller: originController,
-                          readOnly: true,
-                          decoration: InputDecoration(
+                          enabled: canEdit && !isLoading,
+                          onSubmitted: (value) =>
+                              searchSinglePlaceAndSetMarker(value, true),
+                          decoration: const InputDecoration(
                             labelText: "Origin",
-                            prefixIcon: const Icon(Icons.location_on_outlined),
-                            suffixIcon: IconButton(
-                              onPressed: () => openPlaceSearchDialog(true),
-                              icon: const Icon(Icons.search),
-                            ),
-                            border: const OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.location_on_outlined),
+                            border: OutlineInputBorder(),
                           ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: destinationController,
-                          readOnly: true,
-                          decoration: InputDecoration(
+                          enabled: canEdit && !isLoading,
+                          onSubmitted: (value) =>
+                              searchSinglePlaceAndSetMarker(value, false),
+                          decoration: const InputDecoration(
                             labelText: "Destination",
-                            prefixIcon: const Icon(Icons.flag_outlined),
-                            suffixIcon: IconButton(
-                              onPressed: () => openPlaceSearchDialog(false),
-                              icon: const Icon(Icons.search),
-                            ),
-                            border: const OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.flag_outlined),
+                            border: OutlineInputBorder(),
                           ),
                         ),
                         const SizedBox(height: 12),
