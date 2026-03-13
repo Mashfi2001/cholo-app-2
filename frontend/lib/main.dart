@@ -217,6 +217,130 @@ class _DriverRidePageState extends State<DriverRidePage> {
     }
   }
 
+  Future<void> openPlaceSearchDialog(bool isOrigin) async {
+    final TextEditingController searchController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> performSearch(String query) async {
+              if (query.trim().isEmpty) {
+                setDialogState(() {
+                  searchResults = [];
+                });
+                return;
+              }
+
+              setDialogState(() {
+                isSearching = true;
+              });
+
+              try {
+                final response = await http.get(
+                  Uri.parse(
+                    "https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=jsonv2&limit=5",
+                  ),
+                  headers: {"User-Agent": "com.example.frontend"},
+                );
+
+                final data = jsonDecode(response.body);
+
+                if (response.statusCode == 200) {
+                  setDialogState(() {
+                    searchResults = List<Map<String, dynamic>>.from(data);
+                  });
+                } else {
+                  showMessage("Failed to search places");
+                }
+              } catch (e) {
+                showMessage("Could not search places");
+              } finally {
+                setDialogState(() {
+                  isSearching = false;
+                });
+              }
+            }
+
+            return AlertDialog(
+              title: Text(isOrigin ? "Search Origin" : "Search Destination"),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: searchController,
+                      decoration: const InputDecoration(
+                        hintText: "Type a place name",
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.search),
+                      ),
+                      onChanged: performSearch,
+                    ),
+                    const SizedBox(height: 12),
+                    if (isSearching)
+                      const Center(child: CircularProgressIndicator())
+                    else
+                      SizedBox(
+                        height: 250,
+                        child: ListView.builder(
+                          itemCount: searchResults.length,
+                          itemBuilder: (context, index) {
+                            final place = searchResults[index];
+                            final displayName =
+                                place["display_name"]?.toString() ?? "Unknown";
+                            final lat =
+                                double.tryParse(place["lat"].toString()) ?? 0.0;
+                            final lon =
+                                double.tryParse(place["lon"].toString()) ?? 0.0;
+
+                            return ListTile(
+                              title: Text(
+                                displayName,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onTap: () {
+                                final selectedPoint = LatLng(lat, lon);
+
+                                setState(() {
+                                  if (isOrigin) {
+                                    startLocation = selectedPoint;
+                                    originController.text = displayName;
+                                    routePoints = [];
+                                    routeDistanceKm = null;
+                                    routeDurationMin = null;
+                                  } else {
+                                    endLocation = selectedPoint;
+                                    destinationController.text = displayName;
+                                  }
+                                });
+
+                                Navigator.pop(context);
+
+                                if (startLocation != null &&
+                                    endLocation != null) {
+                                  fetchRealRoute();
+                                }
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    searchResults = [];
+  }
+
   Future<void> pickDepartureDateTime() async {
     final now = DateTime.now();
 
@@ -701,21 +825,29 @@ class _DriverRidePageState extends State<DriverRidePage> {
                         const SizedBox(height: 16),
                         TextField(
                           controller: originController,
-                          enabled: false,
-                          decoration: const InputDecoration(
+                          readOnly: true,
+                          decoration: InputDecoration(
                             labelText: "Origin",
-                            prefixIcon: Icon(Icons.location_on_outlined),
-                            border: OutlineInputBorder(),
+                            prefixIcon: const Icon(Icons.location_on_outlined),
+                            suffixIcon: IconButton(
+                              onPressed: () => openPlaceSearchDialog(true),
+                              icon: const Icon(Icons.search),
+                            ),
+                            border: const OutlineInputBorder(),
                           ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: destinationController,
-                          enabled: false,
-                          decoration: const InputDecoration(
+                          readOnly: true,
+                          decoration: InputDecoration(
                             labelText: "Destination",
-                            prefixIcon: Icon(Icons.flag_outlined),
-                            border: OutlineInputBorder(),
+                            prefixIcon: const Icon(Icons.flag_outlined),
+                            suffixIcon: IconButton(
+                              onPressed: () => openPlaceSearchDialog(false),
+                              icon: const Icon(Icons.search),
+                            ),
+                            border: const OutlineInputBorder(),
                           ),
                         ),
                         const SizedBox(height: 12),
