@@ -1,0 +1,42 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// The core User model
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(PASSENGER) // Can be PASSENGER or DRIVER
+  rides     Ride[]   // A user can have many rides
+  createdAt DateTime @default(now())
+}
+
+// The Ride/Slot model
+model Ride {
+  id            String   @id @default(uuid())
+  driverId      String
+  driver        User     @relation(fields: [driverId], references: [id])
+  startLocation String
+  endLocation   String
+  totalSlots    Int      @default(4) // How many seats are available
+  slotsBooked   Int      @default(0)
+  departureTime DateTime
+}
+
+enum Role {
+  PASSENGER
+  DRIVER
+  ADMIN
+}
