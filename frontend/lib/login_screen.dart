@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'admin_panel.dart';
+import 'backend_config.dart';
 import 'driver_panel.dart';
 import 'user_panel.dart';
 
@@ -23,9 +24,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   final Color brandOrange = const Color(0xFFF98825);
   final Color darkText = const Color(0xFF2C323A);
-
-  // Backend URL - Change this to your actual backend URL
-  static const String backendUrl = 'http://10.0.2.2:3000';
 
   @override
   void dispose() {

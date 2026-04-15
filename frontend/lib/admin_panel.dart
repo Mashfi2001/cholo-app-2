@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'user_list_page.dart';
+import 'driver_list_page.dart';
 
 class AdminPanel extends StatelessWidget {
   const AdminPanel({Key? key}) : super(key: key);
@@ -131,6 +133,37 @@ class AdminPanel extends StatelessWidget {
                     child: _buildActionButton('Logout', Icons.logout, () {
                       Navigator.of(context).pop();
                     }),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildActionButton('User List', Icons.people, () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const UserListPage(),
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildActionButton(
+                      'Driver List',
+                      Icons.drive_eta,
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const DriverListPage(),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
