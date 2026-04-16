@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,31 +7,71 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// The core User model
-model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      Role     @default(PASSENGER) // Can be PASSENGER or DRIVER
-  rides     Ride[]   // A user can have many rides
-  createdAt DateTime @default(now())
-}
-
-// The Ride/Slot model
-model Ride {
-  id            String   @id @default(uuid())
-  driverId      String
-  driver        User     @relation(fields: [driverId], references: [id])
-  startLocation String
-  endLocation   String
-  totalSlots    Int      @default(4) // How many seats are available
-  slotsBooked   Int      @default(0)
-  departureTime DateTime
-}
-
 enum Role {
   PASSENGER
   DRIVER
   ADMIN
+}
+
+enum RideStatus {
+  PLANNED
+  ONGOING
+  CANCELLED
+  COMPLETED
+}
+
+enum BookingStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model User {
+  id              Int              @id @default(autoincrement())
+  name            String
+  email           String           @unique
+  password        String?
+  role            Role             @default(PASSENGER)
+  rides           Ride[]
+  bookingRequests BookingRequest[] @relation("PassengerBookings")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model Ride {
+  id               Int               @id @default(autoincrement())
+  driverId         Int
+  origin           String
+  destination      String
+
+  originLat        Float?
+  originLng        Float?
+  destinationLat   Float?
+  destinationLng   Float?
+
+  routeDistanceKm  Float?
+  routeDurationMin Float?
+
+  departureTime    DateTime
+  seats            Int              @default(4)
+  status           RideStatus       @default(PLANNED)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  driver           User             @relation(fields: [driverId], references: [id])
+  bookingRequests  BookingRequest[]
+}
+
+model BookingRequest {
+  id          Int           @id @default(autoincrement())
+  rideId       Int
+  passengerId  Int
+  status       BookingStatus @default(PENDING)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  ride         Ride          @relation(fields: [rideId], references: [id])
+  passenger     User          @relation("PassengerBookings", fields: [passengerId], references: [id])
+
+  @@unique([rideId, passengerId])
 }
