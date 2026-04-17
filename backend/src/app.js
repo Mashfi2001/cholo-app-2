@@ -8,6 +8,7 @@ const rideSearchRoutes = require("./routes/rideSearchRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const broadcastRoutes = require("./routes/broadcastRoutes");
 const messageRoutes = require("./routes/messageRoutes");
+const seatRoutes = require("./routes/seat.routes");
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/rides", rideRoutes);
 app.use("/api/ride-search", rideSearchRoutes);
 app.use("/api/bookings", bookingRoutes);
+app.use("/seat-booking", seatRoutes);
 app.use("/api/verification", verificationRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/broadcasts", broadcastRoutes);

@@ -3,6 +3,7 @@ import 'login_screen.dart';
 import 'verification_request_page.dart';
 import 'book_ride_page.dart';
 import 'broadcast_banner.dart';
+import 'SeatSelectionPage.dart';
 
 class UserPanel extends StatelessWidget {
   final int userId;
@@ -35,11 +36,9 @@ class UserPanel extends StatelessWidget {
             children: [
               const BroadcastBanner(),
               const SizedBox(height: 24),
-              // Logo
               Image.asset('assets/cholo_logo.png', height: 80),
               const SizedBox(height: 40),
 
-              // Welcome Title
               Text(
                 'Welcome to Cholo',
                 style: TextStyle(
@@ -49,17 +48,17 @@ class UserPanel extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center,
               ),
+
               const SizedBox(height: 16),
 
-              // Subtitle
               Text(
                 'Find and book rides with ease',
-                style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 16, color: Colors.grey),
                 textAlign: TextAlign.center,
               ),
+
               const SizedBox(height: 48),
 
-              // User Features List
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
@@ -99,12 +98,16 @@ class UserPanel extends StatelessWidget {
                       'Support',
                       'Get help and contact support',
                     ),
+                    _buildFeatureItem(
+                      'Seat Booking',
+                      'Pick a seat on rides you joined',
+                    ),
                   ],
                 ),
               ),
+
               const SizedBox(height: 32),
 
-              // Quick Actions
               Text(
                 'Quick Actions',
                 style: TextStyle(
@@ -113,6 +116,7 @@ class UserPanel extends StatelessWidget {
                   color: darkText,
                 ),
               ),
+
               const SizedBox(height: 16),
 
               Row(
@@ -132,20 +136,38 @@ class UserPanel extends StatelessWidget {
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: _buildActionButton('My Rides', Icons.history, () {
-                      // TODO: Ride history functionality
-                    }),
+                    child: _buildActionButton('My Rides', Icons.history, () {}),
                   ),
                 ],
               ),
+
               const SizedBox(height: 16),
 
               Row(
                 children: [
                   Expanded(
-                    child: _buildActionButton('Profile', Icons.person, () {
-                      // TODO: Profile functionality
-                    }),
+                    child: _buildActionButton(
+                      'Book Seat',
+                      Icons.event_seat,
+                      () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const SeatSelectionPage(rideId: 1),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildActionButton('Profile', Icons.person, () {}),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -199,9 +221,8 @@ class UserPanel extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.check_circle, color: const Color(0xFFF98825), size: 20),
+          const Icon(Icons.check_circle, color: Color(0xFFF98825), size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -216,7 +237,7 @@ class UserPanel extends StatelessWidget {
                 ),
                 Text(
                   description,
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  style: TextStyle(color: Colors.grey, fontSize: 14),
                 ),
               ],
             ),
@@ -231,7 +252,7 @@ class UserPanel extends StatelessWidget {
     IconData icon,
     VoidCallback onPressed,
   ) {
-    final Color brandOrange = const Color(0xFFF98825);
+    const Color brandOrange = Color(0xFFF98825);
 
     return ElevatedButton(
       onPressed: onPressed,
