@@ -21,9 +21,12 @@ class _BookRidePageState extends State<BookRidePage> {
   LatLng? pickupLocation;
   LatLng? destinationLocation;
 
-  final String openRouteServiceApiKey =
-      "your_api_key"; // Ensure this is replaced with your actual API key
+  List<LatLng> routePoints = []; // To hold the polyline points
 
+  final String openRouteServiceApiKey =
+      "your_api_key"; // Replace this with your actual API key
+
+  // Fetch route details using OSRM (Open Source Routing Machine)
   Future<void> fetchRouteDetails() async {
     if (pickupLocation == null || destinationLocation == null) return;
 
@@ -32,13 +35,20 @@ class _BookRidePageState extends State<BookRidePage> {
     try {
       final response = await http.get(
         Uri.parse(
-          'https://api.openrouteservice.org/v2/directions/driving-car?api_key=$openRouteServiceApiKey&start=${pickupLocation!.longitude},${pickupLocation!.latitude}&end=${destinationLocation!.longitude},${destinationLocation!.latitude}',
+          'https://router.project-osrm.org/route/v1/driving/${pickupLocation!.longitude},${pickupLocation!.latitude};${destinationLocation!.longitude},${destinationLocation!.latitude}?overview=full&geometries=geojson',
         ),
       );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        // Handle route response here, display it if needed
+        if (data['routes'] != null && data['routes'].isNotEmpty) {
+          var coordinates = data['routes'][0]['geometry']['coordinates'] as List;
+          setState(() {
+            routePoints = coordinates
+                .map<LatLng>((coord) => LatLng(coord[1], coord[0]))
+                .toList();
+          });
+        }
       }
     } catch (e) {
       print('Route fetching error: $e');
@@ -103,15 +113,29 @@ class _BookRidePageState extends State<BookRidePage> {
     try {
       final response = await http.get(
         Uri.parse(
-          'https://api.openrouteservice.org/geocode/reverse?api_key=$openRouteServiceApiKey&point.lon=${point.longitude}&point.lat=${point.latitude}&size=1',
+          'https://nominatim.openstreetmap.org/reverse?format=json&lat=${point.latitude}&lon=${point.longitude}',
         ),
+        headers: {
+          'User-Agent': 'ChaloApp',
+        },
       );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data['features'] != null && data['features'].isNotEmpty) {
-          return data['features'][0]['properties']['label'] ??
+        if (data['address'] != null) {
+          // Try to get a meaningful location name from address components
+          final address = data['address'];
+          final locationName = address['road'] ?? 
+              address['suburb'] ?? 
+              address['city'] ?? 
+              address['town'] ?? 
+              address['county'] ?? 
               'Unknown location';
+          return locationName;
+        }
+        // Fallback to display_name if available
+        if (data['display_name'] != null) {
+          return data['display_name'];
         }
       }
     } catch (e) {
@@ -147,8 +171,7 @@ class _BookRidePageState extends State<BookRidePage> {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.yourapp.passenger',
                   ),
                   if (pickupLocation != null)
@@ -181,6 +204,16 @@ class _BookRidePageState extends State<BookRidePage> {
                         ),
                       ],
                     ),
+                  if (routePoints.isNotEmpty)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: routePoints,  // Use the fetched route points
+                          strokeWidth: 4.0,
+                          color: Colors.blue,
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),
@@ -200,9 +233,6 @@ class _BookRidePageState extends State<BookRidePage> {
                       border: OutlineInputBorder(),
                     ),
                     readOnly: true,
-                    onTap: () {
-                      // Handle pickup location tap
-                    },
                   ),
                   const SizedBox(height: 8),
                   TextField(
@@ -212,9 +242,6 @@ class _BookRidePageState extends State<BookRidePage> {
                       border: OutlineInputBorder(),
                     ),
                     readOnly: true,
-                    onTap: () {
-                      // Handle destination location tap
-                    },
                   ),
                   const SizedBox(height: 8),
                   TextField(
