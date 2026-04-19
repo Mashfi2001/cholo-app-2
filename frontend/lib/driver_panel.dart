@@ -4,9 +4,15 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'backend_config.dart';
+import 'login_screen.dart';
+import 'verification_request_page.dart';
 
 class DriverPanel extends StatefulWidget {
-  const DriverPanel({Key? key}) : super(key: key);
+  final int userId;
+  final String userName;
+
+  const DriverPanel({Key? key, required this.userId, required this.userName})
+    : super(key: key);
 
   @override
   State<DriverPanel> createState() => _DriverPanelState();
@@ -316,8 +322,25 @@ class _DriverPanelState extends State<DriverPanel> {
         elevation: 0,
         actions: [
           IconButton(
+            icon: const Icon(Icons.verified_user),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => VerificationRequestPage(
+                  userId: widget.userId,
+                  userName: widget.userName,
+                ),
+              ),
+            ),
+            tooltip: 'Verify Profile',
+          ),
+          IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (context) => const LoginScreen()),
+                (route) => false,
+              );
+            },
           ),
         ],
       ),
@@ -389,6 +412,30 @@ class _DriverPanelState extends State<DriverPanel> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => VerificationRequestPage(
+                                  userId: widget.userId,
+                                  userName: widget.userName,
+                                ),
+                              ),
+                            ),
+                            icon: const Icon(Icons.verified_user),
+                            label: const Text('Verify Profile'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: brandOrange,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   if (canEdit) ...[
                     TextField(
                       controller: originController,

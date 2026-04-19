@@ -57,17 +57,28 @@ class _LoginScreenState extends State<LoginScreen> {
 
         // Navigate based on user role
         final String userRole = data['user']['role'];
+        final int userId = data['user']['id'] is int
+            ? data['user']['id']
+            : int.parse(data['user']['id'].toString());
+        final String userName = data['user']['name'] ?? 'User';
+
         if (userRole == 'ADMIN') {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const AdminPanel()),
           );
         } else if (userRole == 'DRIVER') {
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const DriverPanel()),
+            MaterialPageRoute(
+              builder: (context) =>
+                  DriverPanel(userId: userId, userName: userName),
+            ),
           );
         } else {
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const UserPanel()),
+            MaterialPageRoute(
+              builder: (context) =>
+                  UserPanel(userId: userId, userName: userName),
+            ),
           );
         }
       } else {

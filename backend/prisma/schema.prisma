@@ -26,6 +26,17 @@ enum BookingStatus {
   REJECTED
 }
 
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DocumentType {
+  NID
+  DRIVERS_LICENSE
+}
+
 model User {
   id              Int              @id @default(autoincrement())
   name            String
@@ -34,6 +45,7 @@ model User {
   role            Role             @default(PASSENGER)
   rides           Ride[]
   bookingRequests BookingRequest[] @relation("PassengerBookings")
+  verifications   VerificationRequest[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 }
@@ -75,3 +87,19 @@ model BookingRequest {
 
   @@unique([rideId, passengerId])
 }
+
+model VerificationRequest {
+  id              Int                @id @default(autoincrement())
+  userId          Int
+  documentType    DocumentType       @default(NID)
+  documentUrl     String?            // Keep for backward compatibility, but will be null for new uploads
+  documentPath    String?            // Local file path for uploaded documents
+  extractedData   Json?              // Extracted data from OCR
+  status          VerificationStatus @default(PENDING)
+  rejectionReason String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  user            User               @relation(fields: [userId], references: [id])
+}
+

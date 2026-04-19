@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
+import 'login_screen.dart';
+import 'verification_request_page.dart';
 
 class UserPanel extends StatelessWidget {
-  const UserPanel({Key? key}) : super(key: key);
+  final int userId;
+  final String userName;
+
+  const UserPanel({Key? key, required this.userId, required this.userName})
+    : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -136,7 +142,40 @@ class UserPanel extends StatelessWidget {
                   const SizedBox(width: 16),
                   Expanded(
                     child: _buildActionButton('Logout', Icons.logout, () {
-                      Navigator.of(context).pop();
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(
+                          builder: (context) => const LoginScreen(),
+                        ),
+                        (route) => false,
+                      );
+                    }),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildActionButton(
+                      'Verify Profile',
+                      Icons.verified_user,
+                      () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => VerificationRequestPage(
+                              userId: userId,
+                              userName: userName,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildActionButton('Support', Icons.help, () {
+                      // TODO: Support functionality
                     }),
                   ),
                 ],

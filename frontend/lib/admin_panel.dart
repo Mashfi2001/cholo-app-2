@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'login_screen.dart';
 import 'user_list_page.dart';
 import 'driver_list_page.dart';
+import 'verification_requests_list_page.dart';
 
 class AdminPanel extends StatelessWidget {
   const AdminPanel({Key? key}) : super(key: key);
@@ -131,7 +133,12 @@ class AdminPanel extends StatelessWidget {
                   const SizedBox(width: 16),
                   Expanded(
                     child: _buildActionButton('Logout', Icons.logout, () {
-                      Navigator.of(context).pop();
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(
+                          builder: (context) => const LoginScreen(),
+                        ),
+                        (route) => false,
+                      );
                     }),
                   ),
                 ],
@@ -160,6 +167,22 @@ class AdminPanel extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                             builder: (context) => const DriverListPage(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildActionButton(
+                      'Verification Requests',
+                      Icons.verified_user,
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const VerificationRequestsListPage(),
                           ),
                         );
                       },
