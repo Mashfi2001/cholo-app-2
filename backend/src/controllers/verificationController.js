@@ -108,28 +108,40 @@ function parseDocumentData(text, documentType) {
   if (documentType === "NID") {
     // Extract NID specific information, including Bangla and English labels seen on Bangladesh NID cards
     const nidRegex = /(?:NID|N\.I\.D|ID\s*NO|National\s*ID|জাতীয়\s*পরিচয়পত্র\s*নং|জাতীয়\s*পরিচয়পত্র\s*নং)\s*[:\-]?\s*([\d\s]{8,17})/i;
-    const nameRegex = /(?:Name|নাম)\s*[:\-]?\s*([^\n\r]+)/i;
-    const dobRegex = /(?:Date\s*of\s*Birth|DOB|জন্ম\s*তারিখ|জন্ম)\s*[:\-]?\s*([\d]{1,2}\s*[A-Za-z]{3,9}\s*[\d]{2,4}|[\d\/\-]+)/i;
+    const nameRegex = /(?:Name|নাম)\s*[:\-]?\s*([^\n\r0-9]+)/i;
+    const dobRegex = /(?:Date\s*of\s*Birth|DOB|Birth|জন্ম\s*তারিখ|জন্ম)\s*[:\-]?\s*([\d]{1,2}\s*[A-Za-z]{3,9}\s*[\d]{2,4}|[\d]{1,2}[-\/]\d{1,2}[-\/]\d{2,4}|[\d]{1,2}\s+[A-Z][a-z]{2,8}\s+[\d]{4})/i;
     const addressRegex = /(?:Address|ঠিকানা)\s*[:\-]?\s*([^\n\r]+)/i;
-    const fatherRegex = /(?:Father|পিতা)\s*[:\-]?\s*([^\n\r]+)/i;
-    const motherRegex = /(?:Mother|মাতা)\s*[:\-]?\s*([^\n\r]+)/i;
+    const fatherRegex = /(?:Father|পিতা)\s*[:\-]?\s*([^\n\r0-9]+)/i;
+    const motherRegex = /(?:Mother|মাতা)\s*[:\-]?\s*([^\n\r0-9]+)/i;
 
-    const nidMatch = text.match(nidRegex);
+    let nidMatch = text.match(nidRegex);
+    let nidNumber = null;
+    
+    // If labeled NID not found, try to find any 10-17 digit sequence
+    if (nidMatch) {
+      nidNumber = nidMatch[1].replace(/\s+/g, '').trim();
+    } else {
+      const digitOnlyRegex = /(\d{10,17})/;
+      const digitMatch = text.match(digitOnlyRegex);
+      if (digitMatch) {
+        nidNumber = digitMatch[1];
+      }
+    }
+
     const nameMatch = text.match(nameRegex);
     const dobMatch = text.match(dobRegex);
     const addressMatch = text.match(addressRegex);
     const fatherMatch = text.match(fatherRegex);
     const motherMatch = text.match(motherRegex);
 
-    const rawNid = nidMatch ? nidMatch[1].replace(/\s+/g, '').trim() : null;
 
     data.extractedFields = {
-      nidNumber: rawNid || null,
-      fullName: nameMatch ? nameMatch[1].trim() : null,
+      nidNumber: nidNumber || null,
+      fullName: nameMatch ? nameMatch[1].trim().replace(/\s+/g, ' ').trim() : null,
       dateOfBirth: dobMatch ? dobMatch[1].trim() : null,
       address: addressMatch ? addressMatch[1].trim() : null,
-      fatherName: fatherMatch ? fatherMatch[1].trim() : null,
-      motherName: motherMatch ? motherMatch[1].trim() : null,
+      fatherName: fatherMatch ? fatherMatch[1].trim().replace(/\s+/g, ' ').trim() : null,
+      motherName: motherMatch ? motherMatch[1].trim().replace(/\s+/g, ' ').trim() : null,
     };
   } else if (documentType === "DRIVERS_LICENSE") {
     // Extract Driver's License specific information
