@@ -33,8 +33,11 @@ class _DriverPanelState extends State<DriverPanel> {
   List<LatLng> routePoints = [];
   double? routeDistanceKm;
   double? routeDurationMin;
-  List<Map<String, dynamic>> searchResults = [];
+  List<Map<String, dynamic>> originSearchResults = [];
+  List<Map<String, dynamic>> destinationSearchResults = [];
   bool isSearching = false;
+  bool isSelectingOrigin = false;
+  bool isSelectingDestination = false;
   final MapController mapController = MapController();
 
   LatLng? startLocation;
@@ -72,6 +75,56 @@ class _DriverPanelState extends State<DriverPanel> {
       print('Reverse geocoding error: $e');
     }
     return '${point.latitude.toStringAsFixed(4)}, ${point.longitude.toStringAsFixed(4)}';
+  }
+
+  Future<void> searchLocations(String query, bool isOrigin) async {
+    if (query.isEmpty) {
+      setState(() {
+        if (isOrigin) {
+          originSearchResults = [];
+        } else {
+          destinationSearchResults = [];
+        }
+      });
+      return;
+    }
+
+    setState(() => isSearching = true);
+
+    try {
+      final response = await http.get(
+        Uri.parse(
+          'https://api.openrouteservice.org/geocode/search?api_key=$openRouteServiceApiKey&text=$query&focus.point.lon=90.4125&focus.point.lat=23.8103&boundary.circle.lon=90.4125&boundary.circle.lat=23.8103&boundary.circle.radius=50',
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['features'] != null) {
+          final results = List<Map<String, dynamic>>.from(
+            data['features'].map(
+              (feature) => {
+                'label': feature['properties']['label'] ?? 'Unknown',
+                'lat': feature['geometry']['coordinates'][1],
+                'lon': feature['geometry']['coordinates'][0],
+              },
+            ),
+          );
+
+          setState(() {
+            if (isOrigin) {
+              originSearchResults = results;
+            } else {
+              destinationSearchResults = results;
+            }
+          });
+        }
+      }
+    } catch (e) {
+      print('Location search error: $e');
+    } finally {
+      setState(() => isSearching = false);
+    }
   }
 
   Future<void> fetchRealRoute() async {
@@ -125,7 +178,7 @@ class _DriverPanelState extends State<DriverPanel> {
         Uri.parse('${backendUrl}/api/rides'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
-          'driverId': 1, // TODO: Get from auth
+          'driverId': widget.userId,
           'origin': originController.text,
           'destination': destinationController.text,
           'originLat': startLocation!.latitude,
@@ -442,18 +495,99 @@ class _DriverPanelState extends State<DriverPanel> {
                       decoration: const InputDecoration(
                         labelText: 'Origin',
                         border: OutlineInputBorder(),
+                        hintText: 'Type to search or tap on map',
                       ),
-                      readOnly: true,
+                      onChanged: (value) => searchLocations(value, true),
                     ),
+                    if (originSearchResults.isNotEmpty &&
+                        originController.text.isNotEmpty &&
+                        !isSelectingOrigin)
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: originSearchResults.length,
+                          itemBuilder: (context, index) {
+                            final result = originSearchResults[index];
+                            return ListTile(
+                              title: Text(result['label']),
+                              onTap: () async {
+                                setState(() {
+                                  isSelectingOrigin = true;
+                                  startLocation = LatLng(
+                                    result['lat'],
+                                    result['lon'],
+                                  );
+                                  originController.text = result['label'];
+                                  originSearchResults = [];
+                                  endLocation = null;
+                                  destinationController.clear();
+                                  destinationSearchResults = [];
+                                });
+                                await Future.delayed(
+                                  const Duration(milliseconds: 300),
+                                );
+                                setState(() {
+                                  isSelectingOrigin = false;
+                                });
+                              },
+                            );
+                          },
+                        ),
+                      ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: destinationController,
                       decoration: const InputDecoration(
                         labelText: 'Destination',
                         border: OutlineInputBorder(),
+                        hintText: 'Type to search or tap on map',
                       ),
-                      readOnly: true,
+                      onChanged: (value) => searchLocations(value, false),
                     ),
+                    if (destinationSearchResults.isNotEmpty &&
+                        destinationController.text.isNotEmpty &&
+                        !isSelectingDestination)
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: destinationSearchResults.length,
+                          itemBuilder: (context, index) {
+                            final result = destinationSearchResults[index];
+                            return ListTile(
+                              title: Text(result['label']),
+                              onTap: () async {
+                                setState(() {
+                                  isSelectingDestination = true;
+                                  endLocation = LatLng(
+                                    result['lat'],
+                                    result['lon'],
+                                  );
+                                  destinationController.text = result['label'];
+                                  destinationSearchResults = [];
+                                });
+                                await Future.delayed(
+                                  const Duration(milliseconds: 300),
+                                );
+                                setState(() {
+                                  isSelectingDestination = false;
+                                });
+                                if (startLocation != null &&
+                                    endLocation != null) {
+                                  fetchRealRoute();
+                                }
+                              },
+                            );
+                          },
+                        ),
+                      ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: departureController,
@@ -465,7 +599,7 @@ class _DriverPanelState extends State<DriverPanel> {
                       readOnly: true,
                       onTap: selectDepartureTime,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 16),
                     TextField(
                       controller: seatsController,
                       decoration: const InputDecoration(
@@ -577,6 +711,11 @@ class _DriverPanelState extends State<DriverPanel> {
 
   Future<void> handleMapTap(TapPosition tapPosition, LatLng point) async {
     if (!canEdit || isLoading) return;
+
+    setState(() {
+      originSearchResults = [];
+      destinationSearchResults = [];
+    });
 
     if (startLocation == null) {
       setState(() {
