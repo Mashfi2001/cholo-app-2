@@ -4,6 +4,7 @@ import 'user_list_page.dart';
 import 'driver_list_page.dart';
 import 'verification_requests_list_page.dart';
 import 'broadcast_messages_page.dart';
+import 'session.dart';
 
 class AdminPanel extends StatelessWidget {
   const AdminPanel({Key? key}) : super(key: key);
@@ -139,6 +140,7 @@ class AdminPanel extends StatelessWidget {
                   const SizedBox(width: 16),
                   Expanded(
                     child: _buildActionButton('Logout', Icons.logout, () {
+                      Session.userId = null;
                       Navigator.of(context).pushAndRemoveUntil(
                         MaterialPageRoute(
                           builder: (context) => const LoginScreen(),

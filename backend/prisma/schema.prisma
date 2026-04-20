@@ -167,11 +167,14 @@ model BroadcastMessage {
 }
 
 model SeatBooking {
-  id        Int      @id @default(autoincrement())
-  rideId    Int
-  userId    Int
-  seatNo    Int
-  fare      Float    @default(0)
+  id            Int       @id @default(autoincrement())
+  rideId        Int
+  userId        Int
+  seatNo        Int
+  fare          Float     @default(0)
+  paymentMethod String?
+  paymentPhone  String?
+  paidAt        DateTime?
 
   createdAt DateTime @default(now())
 

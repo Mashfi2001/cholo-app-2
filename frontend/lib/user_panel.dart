@@ -4,6 +4,7 @@ import 'verification_request_page.dart';
 import 'book_ride_page.dart';
 import 'broadcast_banner.dart';
 import 'SeatSelectionPage.dart';
+import 'session.dart';
 
 class UserPanel extends StatelessWidget {
   final int userId;
@@ -172,6 +173,7 @@ class UserPanel extends StatelessWidget {
                   const SizedBox(width: 16),
                   Expanded(
                     child: _buildActionButton('Logout', Icons.logout, () {
+                      Session.userId = null;
                       Navigator.of(context).pushAndRemoveUntil(
                         MaterialPageRoute(
                           builder: (context) => const LoginScreen(),

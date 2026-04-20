@@ -8,6 +8,7 @@ import 'login_screen.dart';
 import 'verification_request_page.dart';
 import 'ride_details_page.dart';
 import 'my_rides_page_driver.dart';
+import 'session.dart';
 
 class DriverPanel extends StatefulWidget {
   final int userId;
@@ -73,7 +74,7 @@ class _DriverPanelState extends State<DriverPanel> {
     }
     try {
       final res = await http.post(
-        Uri.parse('${backendUrl}/api/rides/fare-estimate'),
+        Uri.parse('${backendUrl}/api/fares/estimate'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'routeDistanceKm': routeDistanceKm,
@@ -482,6 +483,7 @@ class _DriverPanelState extends State<DriverPanel> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
+              Session.userId = null;
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (context) => const LoginScreen()),
                 (route) => false,
