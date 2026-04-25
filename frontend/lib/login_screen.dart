@@ -5,7 +5,9 @@ import 'admin_panel.dart';
 import 'backend_config.dart';
 import 'driver_panel.dart';
 import 'user_panel.dart';
-import 'session.dart'; // add at top
+import 'session.dart'; 
+import 'driver_dashboard.dart';  
+
 
 
 class LoginScreen extends StatefulWidget {
@@ -73,8 +75,10 @@ class _LoginScreenState extends State<LoginScreen> {
         } else if (userRole == 'DRIVER') {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (context) =>
-                  DriverPanel(userId: userId, userName: userName),
+              builder: (context) => DriverDashboard(
+                userId: userId,
+                userName: userName,
+              ),
             ),
           );
         } else {

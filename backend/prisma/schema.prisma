@@ -100,7 +100,6 @@ model Ride {
   status           RideStatus        @default(PLANNED)
   totalFare        Float             @default(0)
 
-
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
@@ -181,5 +180,5 @@ model SeatBooking {
   ride      Ride     @relation(fields: [rideId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
 
+  @@unique([rideId, seatNo])
 }
-
