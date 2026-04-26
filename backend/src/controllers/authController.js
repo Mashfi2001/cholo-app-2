@@ -59,6 +59,35 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
+    // Check if user is permanently banned
+    if (user.status === 'DELETED') {
+      return res.status(403).json({ 
+        error: "Your account has been permanently banned. You cannot login.", 
+        banned: true,
+        banType: "permanent"
+      });
+    }
+
+    // Check if user is temporarily suspended
+    if (user.status === 'SUSPENDED') {
+      const now = new Date();
+      if (user.suspendedUntil && new Date(user.suspendedUntil) > now) {
+        const bannedUntil = new Date(user.suspendedUntil).toLocaleString();
+        return res.status(403).json({ 
+          error: `Your account is temporarily banned until ${bannedUntil}. Please try again later.`,
+          banned: true,
+          banType: "temporary",
+          suspendedUntil: user.suspendedUntil
+        });
+      } else {
+        // Suspension period is over, update status back to ACTIVE
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { status: 'ACTIVE', suspendedUntil: null }
+        });
+      }
+    }
+
     // Check password
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {

@@ -123,7 +123,7 @@ class _UserListPageState extends State<UserListPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Suspend User'),
+        title: Text('Temporary Ban User'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -168,7 +168,7 @@ class _UserListPageState extends State<UserListPage> {
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            child: Text('Suspend', style: TextStyle(color: Colors.white)),
+            child: Text('Temporary Ban', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -198,7 +198,7 @@ class _UserListPageState extends State<UserListPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete User'),
+        title: Text('Permanent ban User'),
         content: Text('Permanently delete $userName? This action cannot be undone.'),
         actions: [
           TextButton(
@@ -226,7 +226,7 @@ class _UserListPageState extends State<UserListPage> {
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text('Delete', style: TextStyle(color: Colors.white)),
+            child: Text('Permanent ban', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -479,7 +479,7 @@ class _UserListPageState extends State<UserListPage> {
                                             user['name'],
                                           ),
                                           icon: Icon(Icons.pause),
-                                          label: Text('Suspend'),
+                                          label: Text('Temporary Ban'),
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor: Colors.orange,
                                             foregroundColor: Colors.white,
@@ -512,7 +512,7 @@ class _UserListPageState extends State<UserListPage> {
                                           user['name'],
                                         ),
                                         icon: Icon(Icons.delete),
-                                        label: Text('Delete'),
+                                        label: Text('Permanent ban'),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.red,
                                           foregroundColor: Colors.white,

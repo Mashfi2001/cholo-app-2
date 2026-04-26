@@ -112,7 +112,7 @@ class _DriverListPageState extends State<DriverListPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Suspend Driver'),
+        title: Text('Temporary Ban Driver'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -157,7 +157,7 @@ class _DriverListPageState extends State<DriverListPage> {
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            child: Text('Suspend', style: TextStyle(color: Colors.white)),
+            child: Text('Temporary Ban', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -187,7 +187,7 @@ class _DriverListPageState extends State<DriverListPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete Driver'),
+        title: Text('Permanent ban Driver'),
         content: Text('Permanently delete $driverName? This action cannot be undone.'),
         actions: [
           TextButton(
@@ -215,7 +215,7 @@ class _DriverListPageState extends State<DriverListPage> {
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text('Delete', style: TextStyle(color: Colors.white)),
+            child: Text('Permanent ban', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -461,7 +461,7 @@ class _DriverListPageState extends State<DriverListPage> {
                                             driver['name'],
                                           ),
                                           icon: Icon(Icons.pause),
-                                          label: Text('Suspend'),
+                                          label: Text('Temporary Ban'),
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor: Colors.orange,
                                             foregroundColor: Colors.white,
@@ -494,7 +494,7 @@ class _DriverListPageState extends State<DriverListPage> {
                                           driver['name'],
                                         ),
                                         icon: Icon(Icons.delete),
-                                        label: Text('Delete'),
+                                        label: Text('Permanent ban'),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.red,
                                           foregroundColor: Colors.white,
