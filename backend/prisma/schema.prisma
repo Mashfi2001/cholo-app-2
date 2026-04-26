@@ -66,9 +66,14 @@ model User {
   name                String
   email               String                  @unique
   password            String?
+  phone               String?
   role                Role                    @default(PASSENGER)
   status              AccountStatus           @default(ACTIVE)
   suspendedUntil      DateTime?
+  warningCount        Int                     @default(0)
+  isBanned            Boolean                 @default(false)
+  banReason           String?
+  banExpiryDate       DateTime?
   rides               Ride[]
   systemMessages      SystemMessage[]
   bookingRequests     BookingRequest[]        @relation("PassengerBookings")
@@ -76,6 +81,8 @@ model User {
   seatBookings        SeatBooking[]
   driverComplaints    Complaint[]             @relation("DriverComplaints")
   passengerComplaints Complaint[]             @relation("PassengerComplaints")
+  warnings            Warning[]
+  notifications       Notification[]
   createdAt           DateTime                @default(now())
   updatedAt           DateTime                @updatedAt
 }
@@ -199,12 +206,42 @@ model Complaint {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  driver    User @relation("DriverComplaints", fields: [driverId], references: [id])
-  passenger User @relation("PassengerComplaints", fields: [passengerId], references: [id])
-  ride      Ride @relation(fields: [rideId], references: [id])
+  driver    User      @relation("DriverComplaints", fields: [driverId], references: [id])
+  passenger User      @relation("PassengerComplaints", fields: [passengerId], references: [id])
+  ride      Ride      @relation(fields: [rideId], references: [id])
+  warnings  Warning[]
 
   @@index([driverId])
   @@index([passengerId])
   @@index([rideId])
   @@index([status])
+}
+
+model Warning {
+  id          Int      @id @default(autoincrement())
+  passengerId Int
+  complaintId Int
+  message     String
+  issuedBy    Int
+  createdAt   DateTime @default(now())
+
+  passenger User      @relation(fields: [passengerId], references: [id])
+  complaint Complaint @relation(fields: [complaintId], references: [id])
+
+  @@index([passengerId])
+  @@index([complaintId])
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  type      String   @default("INFO")
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }

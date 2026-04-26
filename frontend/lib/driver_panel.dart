@@ -42,6 +42,9 @@ class _DriverPanelState extends State<DriverPanel> {
   bool isSelectingOrigin = false;
   bool isSelectingDestination = false;
   final MapController mapController = MapController();
+  List<dynamic> notifications = [];
+  bool isNotifLoading = false;
+
 
   LatLng? startLocation;
   LatLng? endLocation;
@@ -115,6 +118,62 @@ class _DriverPanelState extends State<DriverPanel> {
   void initState() {
     super.initState();
     seatsController.text = "4";
+    fetchNotifications();
+  }
+
+  Future<void> fetchNotifications() async {
+    if (Session.userId == null) return;
+    setState(() => isNotifLoading = true);
+    try {
+      final response = await http.get(
+        Uri.parse('$backendUrl/api/notifications/user/${Session.userId}'),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          notifications = data['notifications'];
+        });
+      }
+    } catch (e) {
+      print('Error fetching notifications: $e');
+    } finally {
+      setState(() => isNotifLoading = false);
+    }
+  }
+
+  void _showNotifications() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Notifications'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: notifications.isEmpty
+              ? const Center(child: Text('No notifications'))
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: notifications.length,
+                  itemBuilder: (context, index) {
+                    final n = notifications[index];
+                    return ListTile(
+                      leading: Icon(
+                        n['type'] == 'WARNING' ? Icons.warning : 
+                        n['type'] == 'SUCCESS' ? Icons.check_circle : Icons.info,
+                        color: n['type'] == 'WARNING' ? Colors.orange : 
+                               n['type'] == 'SUCCESS' ? Colors.green : Colors.blue,
+                      ),
+                      title: Text(n['title'], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                      subtitle: Text(n['message'], style: const TextStyle(fontSize: 12)),
+                      contentPadding: EdgeInsets.zero,
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
   }
 
   Future<String> reverseGeocode(LatLng point) async {
@@ -456,6 +515,25 @@ class _DriverPanelState extends State<DriverPanel> {
         centerTitle: true,
         elevation: 0,
         actions: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications),
+                onPressed: _showNotifications,
+              ),
+              if (notifications.any((n) => n['isRead'] == false))
+                Positioned(
+                  right: 12,
+                  top: 12,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(6)),
+                    constraints: const BoxConstraints(minWidth: 12, minHeight: 12),
+                  ),
+                ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.list),
             onPressed: () {
