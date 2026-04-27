@@ -102,4 +102,3 @@ model VerificationRequest {
 
   user            User               @relation(fields: [userId], references: [id])
 }
-
