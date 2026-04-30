@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'verification_request_page.dart';
+import 'book_ride_page.dart';
 
 class UserPanel extends StatelessWidget {
   final int userId;
