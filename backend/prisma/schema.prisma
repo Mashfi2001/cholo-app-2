@@ -60,6 +60,9 @@ model Ride {
   originLng        Float?
   destinationLat   Float?
   destinationLng   Float?
+  routePolyline    String?
+  currentLat       Float?
+  currentLng       Float?
 
   routeDistanceKm  Float?
   routeDurationMin Float?

@@ -10,6 +10,7 @@ exports.createRide = async (req, res) => {
       originLng,
       destinationLat,
       destinationLng,
+      routePolyline,
       routeDistanceKm,
       routeDurationMin,
       departureTime,
@@ -32,6 +33,7 @@ exports.createRide = async (req, res) => {
         originLng: originLng != null ? Number(originLng) : null,
         destinationLat: destinationLat != null ? Number(destinationLat) : null,
         destinationLng: destinationLng != null ? Number(destinationLng) : null,
+        routePolyline: routePolyline || null,
         routeDistanceKm: routeDistanceKm != null ? Number(routeDistanceKm) : null,
         routeDurationMin: routeDurationMin != null ? Number(routeDurationMin) : null,
       },
@@ -45,6 +47,7 @@ exports.createRide = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 exports.getRideById = async (req, res) => {
   try {
@@ -74,11 +77,13 @@ exports.updateRideRoute = async (req, res) => {
       originLng,
       destinationLat,
       destinationLng,
+      routePolyline,
       routeDistanceKm,
       routeDurationMin,
       departureTime,
       seats,
     } = req.body;
+
 
     const existingRide = await prisma.ride.findUnique({
       where: { id },
@@ -107,10 +112,12 @@ exports.updateRideRoute = async (req, res) => {
         originLng: originLng != null ? Number(originLng) : existingRide.originLng,
         destinationLat: destinationLat != null ? Number(destinationLat) : existingRide.destinationLat,
         destinationLng: destinationLng != null ? Number(destinationLng) : existingRide.destinationLng,
+        routePolyline: routePolyline != null ? routePolyline : existingRide.routePolyline,
         routeDistanceKm: routeDistanceKm != null ? Number(routeDistanceKm) : existingRide.routeDistanceKm,
         routeDurationMin: routeDurationMin != null ? Number(routeDurationMin) : existingRide.routeDurationMin,
       },
     });
+
 
     res.json({
       message: "Ride route updated successfully",

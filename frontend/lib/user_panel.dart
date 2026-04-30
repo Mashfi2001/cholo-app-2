@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'verification_request_page.dart';
+import 'book_ride_page.dart';
+import 'broadcast_banner.dart';
 
 class UserPanel extends StatelessWidget {
   final int userId;
@@ -31,6 +33,8 @@ class UserPanel extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const BroadcastBanner(),
+              const SizedBox(height: 24),
               // Logo
               Image.asset('assets/cholo_logo.png', height: 80),
               const SizedBox(height: 40),

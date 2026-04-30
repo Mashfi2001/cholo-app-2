@@ -81,6 +81,17 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           );
         }
+      } else if (response.statusCode == 403) {
+        // Handle ban/suspension errors
+        final error = jsonDecode(response.body);
+        setState(() {
+          _errorMessage = error['error'] ?? 'Login failed';
+        });
+        
+        // Show a more prominent dialog for ban/suspension
+        if (error['banned'] == true) {
+          _showBanDialog(error['banType'] ?? 'temporary', error['suspendedUntil']);
+        }
       } else {
         final error = jsonDecode(response.body);
         setState(() {
@@ -96,6 +107,74 @@ class _LoginScreenState extends State<LoginScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  void _showBanDialog(String banType, String? suspendedUntil) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              banType == 'permanent' ? Icons.block : Icons.schedule,
+              color: Colors.red,
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                banType == 'permanent' ? 'Account Permanently Banned' : 'Account Temporarily Banned',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (banType == 'permanent')
+              const Text(
+                'Your account has been permanently banned. You cannot login to this application. If you believe this is a mistake, please contact support.',
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Your account has been temporarily suspended.',
+                  ),
+                  const SizedBox(height: 12),
+                  if (suspendedUntil != null)
+                    Text(
+                      'Banned until: ${DateTime.parse(suspendedUntil).toLocal().toString().split('.')[0]}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'You can try logging in again after the suspension period ends.',
+                  ),
+                ],
+              ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text(
+              'Understood',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _signup() async {
