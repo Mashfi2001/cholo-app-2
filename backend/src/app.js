@@ -4,6 +4,7 @@ const authRoutes = require("./routes/authRoutes");
 const rideRoutes = require("./routes/rideRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const verificationRoutes = require("./routes/verificationRoutes");
+const rideSearchRoutes = require("./routes/rideSearchRoutes");
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/rides", rideRoutes);
+app.use("/api/rides", rideSearchRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/verification", verificationRoutes);
 

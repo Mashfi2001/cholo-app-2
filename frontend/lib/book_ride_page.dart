@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'backend_config.dart';
+import 'ride_search_loading_page.dart';
 
 class BookRidePage extends StatefulWidget {
   const BookRidePage({Key? key}) : super(key: key);
@@ -22,9 +24,6 @@ class _BookRidePageState extends State<BookRidePage> {
   LatLng? destinationLocation;
 
   List<LatLng> routePoints = []; // To hold the polyline points
-
-  final String openRouteServiceApiKey =
-      "your_api_key"; // Replace this with your actual API key
 
   // Fetch route details using OSRM (Open Source Routing Machine)
   Future<void> fetchRouteDetails() async {
@@ -58,13 +57,63 @@ class _BookRidePageState extends State<BookRidePage> {
   }
 
   Future<void> searchRide() async {
-    // You can call your backend API to search for available rides
-    // Based on the selected pickup and destination locations
-    // For now, let's just print the selected details
-    print('Searching for ride...');
-    print('Pickup: ${pickupController.text}');
-    print('Destination: ${destinationController.text}');
-    print('Time: ${timeController.text}');
+    // Validate that all fields are filled
+    if (pickupLocation == null || destinationLocation == null || timeController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select pickup, destination, and time'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Parse the time from the timeController
+      DateTime selectedDateTime = DateTime.parse(timeController.text.split(' ')[0]);
+      
+      // Get the time portion if available
+      if (timeController.text.contains(' ')) {
+        final timePart = timeController.text.split(' ')[1];
+        final timeParts = timePart.split(':');
+        if (timeParts.length >= 2) {
+          selectedDateTime = DateTime(
+            selectedDateTime.year,
+            selectedDateTime.month,
+            selectedDateTime.day,
+            int.parse(timeParts[0]),
+            int.parse(timeParts[1]),
+          );
+        }
+      }
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => RideSearchLoadingPage(
+              pickupLat: pickupLocation!.latitude,
+              pickupLng: pickupLocation!.longitude,
+              dropLat: destinationLocation!.latitude,
+              dropLng: destinationLocation!.longitude,
+              requestedTime: selectedDateTime.toIso8601String(),
+              pickupLocation: pickupLocation!,
+              destinationLocation: destinationLocation!,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Search error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
   // This function handles map tap
@@ -247,7 +296,7 @@ class _BookRidePageState extends State<BookRidePage> {
                   TextField(
                     controller: timeController,
                     decoration: const InputDecoration(
-                      labelText: 'Select Departure Time',
+                      labelText: 'Select Request Time',
                       border: OutlineInputBorder(),
                       suffixIcon: Icon(Icons.calendar_today),
                     ),
