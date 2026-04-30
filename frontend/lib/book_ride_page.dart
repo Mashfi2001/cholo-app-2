@@ -69,23 +69,43 @@ class _BookRidePageState extends State<BookRidePage> {
     }
 
     try {
-      // Parse the time from the timeController
-      DateTime selectedDateTime = DateTime.parse(timeController.text.split(' ')[0]);
+      // Parse the datetime string
+      // Format is now: "2026-04-25 6:20 PM"
+      final parts = timeController.text.split(' ');
       
-      // Get the time portion if available
-      if (timeController.text.contains(' ')) {
-        final timePart = timeController.text.split(' ')[1];
-        final timeParts = timePart.split(':');
-        if (timeParts.length >= 2) {
-          selectedDateTime = DateTime(
-            selectedDateTime.year,
-            selectedDateTime.month,
-            selectedDateTime.day,
-            int.parse(timeParts[0]),
-            int.parse(timeParts[1]),
-          );
-        }
+      if (parts.length < 3) {
+        throw Exception('Invalid time format');
       }
+      
+      String dateStr = parts[0]; // 2026-04-25
+      String timeStr = parts[1]; // 6:20
+      String meridiem = parts[2]; // PM
+      
+      // Parse time string (6:20)
+      final timeParts = timeStr.split(':');
+      int hour = int.parse(timeParts[0]);
+      int minute = int.parse(timeParts[1]);
+      
+      // Convert to 24-hour format
+      if (meridiem == 'PM' && hour != 12) {
+        hour += 12;
+      } else if (meridiem == 'AM' && hour == 12) {
+        hour = 0;
+      }
+      
+      // Create the datetime
+      final selectedDate = DateTime.parse(dateStr);
+      DateTime selectedDateTime = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        hour,
+        minute,
+      );
+
+      print('DEBUG: Parsed time -> $selectedDateTime');
+      print('DEBUG: Pickup (${pickupLocation!.latitude}, ${pickupLocation!.longitude})');
+      print('DEBUG: Drop (${destinationLocation!.latitude}, ${destinationLocation!.longitude})');
 
       if (mounted) {
         Navigator.push(
@@ -96,6 +116,8 @@ class _BookRidePageState extends State<BookRidePage> {
               pickupLng: pickupLocation!.longitude,
               dropLat: destinationLocation!.latitude,
               dropLng: destinationLocation!.longitude,
+              pickupName: pickupController.text,
+              dropName: destinationController.text,
               requestedTime: selectedDateTime.toIso8601String(),
               pickupLocation: pickupLocation!,
               destinationLocation: destinationLocation!,
@@ -314,9 +336,12 @@ class _BookRidePageState extends State<BookRidePage> {
                           initialTime: TimeOfDay.now(),
                         );
                         if (pickedTime != null) {
+                          // Format as: "2026-04-25 6:20 PM" for clearer display
+                          final formattedDate =
+                              '${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}';
+                          final formattedTime = pickedTime.format(context);
                           setState(() {
-                            timeController.text =
-                                '${pickedDate.toLocal()} ${pickedTime.format(context)}';
+                            timeController.text = '$formattedDate $formattedTime';
                           });
                         }
                       }

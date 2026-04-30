@@ -117,6 +117,23 @@ class _RideResultsPageState extends State<RideResultsPage> {
   }
 
   Widget _buildRideCard(BuildContext context, dynamic ride) {
+    // Safely extract ride data with defaults
+    final rideId = ride['id'] ?? 'Unknown';
+    final driverName = ride['driver']?['name'] ?? 'Driver';
+    final driverId = ride['driver']?['id'] ?? 'N/A';
+    final seats = ride['seats'] ?? 0;
+    final eta = ride['eta'] ?? ride['departureTime'] ?? '';
+    final departureTime = ride['departureTime'] ?? '';
+    
+    // Safely extract marker data - now includes names
+    final pickupLat = ride['pickupMarker']?['lat'] ?? 0.0;
+    final pickupLng = ride['pickupMarker']?['lng'] ?? 0.0;
+    final pickupName = ride['pickupMarker']?['name'] ?? 'Unknown Location';
+    
+    final dropLat = ride['dropMarker']?['lat'] ?? 0.0;
+    final dropLng = ride['dropMarker']?['lng'] ?? 0.0;
+    final dropName = ride['dropMarker']?['name'] ?? 'Unknown Location';
+
     return GestureDetector(
       onTap: () {
         Navigator.of(context).push(
@@ -140,7 +157,7 @@ class _RideResultsPageState extends State<RideResultsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
+              // Header with Driver Info
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -149,28 +166,28 @@ class _RideResultsPageState extends State<RideResultsPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Ride #${ride['id'].toString().substring(0, 8)}',
+                          'Ride #$rideId',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFFF98825),
                           ),
                         ),
+                        SizedBox(height: 4),
                         Text(
-                          'Driver ID: ${ride['driver']?['id'] ?? 'N/A'}',
+                          'Driver: $driverName',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          'Driver ID: $driverId',
                           style: TextStyle(
                             fontSize: 11,
                             color: Colors.grey,
                           ),
                         ),
-                        if (ride['driver'] != null && ride['driver']['name'] != null)
-                          Text(
-                            'Driver: ${ride['driver']['name']}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
                       ],
                     ),
                   ),
@@ -184,7 +201,7 @@ class _RideResultsPageState extends State<RideResultsPage> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      '${ride['seats']} seats',
+                      '$seats seats',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
@@ -208,7 +225,7 @@ class _RideResultsPageState extends State<RideResultsPage> {
                     Icon(Icons.access_time, size: 16, color: Colors.blue[700]),
                     SizedBox(width: 8),
                     Text(
-                      'ETA: ${_formatTime(ride['eta'])}',
+                      'ETA: ${_formatTime(eta)}',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.blue[700],
@@ -218,7 +235,7 @@ class _RideResultsPageState extends State<RideResultsPage> {
                 ),
               ),
               SizedBox(height: 12),
-              // Driver Pickup
+              // Pickup Location - now shows name
               Row(
                 children: [
                   Container(
@@ -235,14 +252,14 @@ class _RideResultsPageState extends State<RideResultsPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Driver Pickup',
+                          'Your Pickup',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey,
                           ),
                         ),
                         Text(
-                          '${ride['origin']['lat'].toStringAsFixed(4)}, ${ride['origin']['lng'].toStringAsFixed(4)}',
+                          pickupName,
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
@@ -250,14 +267,21 @@ class _RideResultsPageState extends State<RideResultsPage> {
                         ),
                         SizedBox(height: 4),
                         TextButton(
-                          onPressed: () {},
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('View Slots - Coming Soon'),
+                                duration: Duration(seconds: 1),
+                              ),
+                            );
+                          },
                           style: TextButton.styleFrom(
                             padding: EdgeInsets.zero,
                           ),
                           child: Text(
-                            'View slots',
+                            'View Slots →',
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 12,
                               color: Color(0xFF4CAF50),
                               fontWeight: FontWeight.w500,
                             ),
@@ -269,7 +293,7 @@ class _RideResultsPageState extends State<RideResultsPage> {
                 ],
               ),
               SizedBox(height: 12),
-              // Your Dropoff
+              // Dropoff Location - now shows name
               Row(
                 children: [
                   Container(
@@ -293,7 +317,7 @@ class _RideResultsPageState extends State<RideResultsPage> {
                           ),
                         ),
                         Text(
-                          '${ride['destination']['lat'].toStringAsFixed(4)}, ${ride['destination']['lng'].toStringAsFixed(4)}',
+                          dropName,
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
@@ -319,11 +343,7 @@ class _RideResultsPageState extends State<RideResultsPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Driver: ${_formatTime(ride['departureTime'])}',
-                          style: TextStyle(fontSize: 13),
-                        ),
-                        Text(
-                          'You: ${_formatTime(ride['requestedTime'])}',
+                          'Departure: ${_formatTime(departureTime)}',
                           style: TextStyle(fontSize: 13),
                         ),
                       ],

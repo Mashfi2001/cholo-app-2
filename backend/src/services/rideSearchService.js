@@ -19,15 +19,15 @@ function getDistance(lat1, lng1, lat2, lng2) {
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-  return R * c; // meters
+  return R * c;
 }
 
 // -------------------------------
-// POLYLINE DECODER (Google encoded polyline)
+// Decode polyline
 // -------------------------------
 function decodePolyline(encoded) {
   if (!encoded) return [];
-  
+
   const points = [];
   let index = 0, lat = 0, lng = 0;
 
@@ -55,113 +55,140 @@ function decodePolyline(encoded) {
 
     points.push([lat * 1e-5, lng * 1e-5]);
   }
+
   return points;
 }
 
 // -------------------------------
-// Distance to line segment
+// Find closest point index
 // -------------------------------
-function distanceToSegment(point, a, b) {
-  const px = point[0], py = point[1];
-  const ax = a[0], ay = a[1];
-  const bx = b[0], by = b[1];
+function findClosestPointIndex(point, routePoints) {
+  let minDist = Infinity;
+  let closestIndex = -1;
 
-  const dx = bx - ax, dy = by - ay;
-  const lenSq = dx*dx + dy*dy;
-  
-  if (lenSq === 0) return getDistance(px, py, ax, ay);
+  for (let i = 0; i < routePoints.length; i++) {
+    const dist = getDistance(
+      point[0],
+      point[1],
+      routePoints[i][0],
+      routePoints[i][1]
+    );
 
-  let t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
-  t = Math.max(0, Math.min(1, t));
+    if (dist < minDist) {
+      minDist = dist;
+      closestIndex = i;
+    }
+  }
 
-  const projX = ax + t * dx;
-  const projY = ay + t * dy;
-  return getDistance(px, py, projX, projY);
+  return { index: closestIndex, distance: minDist };
 }
 
-function calculateETA(distanceMeters, avgSpeedKmh = 50) {
-  // Convert speed from km/h to m/s
-  const speedMs = (avgSpeedKmh * 1000) / 3600;
-  
-  // Time in seconds
-  const timeSeconds = distanceMeters / speedMs;
-  
-  // Convert to minutes
-  const etaMinutes = timeSeconds / 60;
-  
-  return Math.round(etaMinutes);
+// -------------------------------
+// ETA calculation
+// -------------------------------
+function calculateETA(distanceMeters, speedKmh = 40) {
+  const speedMs = (speedKmh * 1000) / 3600;
+  const seconds = distanceMeters / speedMs;
+  return Math.round(seconds / 60);
 }
 
-// ===== FIXED FUNCTIONS - SCOPE ISSUE RESOLVED =====
 // -------------------------------
-// FORMAT FOR FLUTTER MAP
+// Format response
 // -------------------------------
-function formatRide(pickupLat, pickupLng, dropLat, dropLng, ride, pickupToOrigin, dropToDest, requestedTime, pickupRouteDist, dropRouteDist, eta, driver) {
+function formatRide(ride, pickupLat, pickupLng, dropLat, dropLng, pickupMatch, dropMatch, eta, pickupName, dropName) {
+  // Ensure names are not empty
+  const finalPickupName = pickupName && pickupName.trim() ? pickupName : `${pickupLat.toFixed(4)}, ${pickupLng.toFixed(4)}`;
+  const finalDropName = dropName && dropName.trim() ? dropName : `${dropLat.toFixed(4)}, ${dropLng.toFixed(4)}`;
+  
   return {
     id: ride.id,
     driver: {
-      id: driver.id,
-      name: driver.name || 'Unknown Driver'
+      id: ride.driver.id,
+      name: ride.driver.name || "Driver"
     },
     origin: {
       lat: ride.originLat,
-      lng: ride.originLng
+      lng: ride.originLng,
+      name: ride.origin
     },
-    
     destination: {
       lat: ride.destinationLat,
-      lng: ride.destinationLng
+      lng: ride.destinationLng,
+      name: ride.destination
     },
     departureTime: ride.departureTime,
-    eta: eta.toISOString(),
+    eta: eta,
     routePolyline: ride.routePolyline,
-    requestedTime: requestedTime,
     seats: ride.seats,
 
     pickupMarker: {
       lat: pickupLat,
-      lng: pickupLng
+      lng: pickupLng,
+      name: finalPickupName
     },
     dropMarker: {
       lat: dropLat,
-      lng: dropLng
+      lng: dropLng,
+      name: finalDropName
     },
 
     meta: {
-      pickupDistance: Math.round(pickupToOrigin),
-      dropDistance: Math.round(dropToDest),
-      pickupRouteDist: Math.round(pickupRouteDist),
-      dropRouteDist: Math.round(dropRouteDist),
-      etaMinutes: Math.round((new Date(eta) - new Date(requestedTime)) / 60000)
+      pickupDistance: Math.round(pickupMatch.distance),
+      dropDistance: Math.round(dropMatch.distance),
+      pickupIndex: pickupMatch.index,
+      dropIndex: dropMatch.index
     }
   };
 }
 
 // -------------------------------
-// MAP CONFIG
+// Fallback: Simple distance-based matching (no polyline)
 // -------------------------------
-function getMapConfig(type) {
-  switch (type) {
-    case "MATCH":
-      return {
-        showRoutes: true,
-        zoomLevel: "normal"
-      };
+function matchRideWithoutPolyline(ride, pickupLat, pickupLng, dropLat, dropLng, requestedTime) {
+  const MAX_START_DISTANCE = 5000; // 5km from ride origin
+  const MAX_END_DISTANCE = 5000; // 5km from ride destination
 
-    case "SOLO_SUGGESTION":
-      return {
-        showRoutes: false,
-        showDirectLine: true,
-        zoomLevel: "normal"
-      };
+  // Check pickup distance to ride origin
+  const pickupToOrigin = getDistance(
+    pickupLat, pickupLng,
+    ride.originLat, ride.originLng
+  );
 
-    default:
-      return {};
-  }
+  // Check drop distance to ride destination
+  const dropToDestination = getDistance(
+    dropLat, dropLng,
+    ride.destinationLat, ride.destinationLng
+  );
+
+  if (pickupToOrigin > MAX_START_DISTANCE) return null;
+  if (dropToDestination > MAX_END_DISTANCE) return null;
+
+  // Check if direction is reasonable (pickup shouldn't be too far from origin, drop too close to origin)
+  const pickupToDestination = getDistance(pickupLat, pickupLng, ride.destinationLat, ride.destinationLng);
+  const originToDestination = getDistance(ride.originLat, ride.originLng, ride.destinationLat, ride.destinationLng);
+
+  // Pickup should be closer to origin than destination
+  if (pickupToOrigin > pickupToDestination) return null;
+
+  // Time window check
+  const requested = new Date(requestedTime);
+  const diff = Math.abs(ride.departureTime - requested) / 60000;
+
+  if (diff > 45) return null;
+
+  // Calculate rough ETA
+  const eta = ride.departureTime;
+
+  return {
+    pickupMatch: { distance: pickupToOrigin, index: 0 },
+    dropMatch: { distance: dropToDestination, index: 1 },
+    eta: eta,
+    score: pickupToOrigin + dropToDestination
+  };
 }
 
 // -------------------------------
-// MAIN SEARCH ENGINE
+// MAIN SEARCH FUNCTION
 // -------------------------------
 exports.findRides = async ({
   pickupLat,
@@ -169,159 +196,199 @@ exports.findRides = async ({
   dropLat,
   dropLng,
   requestedTime,
-  requestedTimeWindowStart,
-  requestedTimeWindowEnd
+  pickupName,
+  dropName
 }, debug = false) => {
+
+  if (debug) {
+    console.log("🔍 SEARCH REQUEST:");
+    console.log(`  Pickup: "${pickupName}" (${pickupLat}, ${pickupLng})`);
+    console.log(`  Drop: "${dropName}" (${dropLat}, ${dropLng})`);
+    console.log(`  Time: ${requestedTime}`);
+    console.log(`  [DEBUG] pickupName type: ${typeof pickupName}, value: '${pickupName}'`);
+    console.log(`  [DEBUG] dropName type: ${typeof dropName}, value: '${dropName}'`);
+  }
 
   const rides = await prisma.ride.findMany({
     where: {
-      status: {
-        in: ["PLANNED", "ONGOING"]
-      }
+      status: { in: ["PLANNED", "ONGOING"] }
     },
     include: {
       driver: true
     }
   });
 
-  let matches = [];
-
   if (debug) {
-    console.log("\n========== RIDE SEARCH DEBUG ==========");
-    console.log(`Passenger: pickup(${pickupLat}, ${pickupLng}) → drop(${dropLat}, ${dropLng})`);
-    console.log(`Requested time: ${requestedTime}`);
-    console.log(`Total rides in DB: ${rides.length}`);
-    console.log("========================================\n");
+    console.log(`📍 Found ${rides.length} rides to check`);
+    for (const ride of rides) {
+      console.log(`  - Ride ${ride.id}: Driver ID=${ride.driverId}, Name=${ride.driver?.name || 'N/A'}`);
+    }
+    console.log("");
   }
 
+  const matches = [];
+  const rejectedReasons = [];
+
   for (const ride of rides) {
-    // Skip if missing coordinates
-    if (!ride.originLat || !ride.originLng || !ride.destinationLat || !ride.destinationLng) {
-      if (debug) console.log(`❌ Ride ${ride.id}: Missing coordinates`);
-      continue;
-    }
-
-    // Calculate all key distances first for pickupRouteDist
-    const pickupToOrigin = getDistance(pickupLat, pickupLng, ride.originLat, ride.originLng);
-    const pickupToDest = getDistance(pickupLat, pickupLng, ride.destinationLat, ride.destinationLng);
-    const dropToOrigin = getDistance(dropLat, dropLng, ride.originLat, ride.originLng);
-    const dropToDest = getDistance(dropLat, dropLng, ride.destinationLat, ride.destinationLng);
-    const rideDistance = getDistance(ride.originLat, ride.originLng, ride.destinationLat, ride.destinationLng);
-
-    // 2. CHECK: Both pickup and drop should be reasonably close to the driver's route
-    // This allows pickup/drop anywhere along the route corridor
-    const maxDistToRoute = 3000; // 3km tolerance to the route
-    
-    // POLYLINE ROUTE MATCHING (5km tolerance)
-    const routePoints = decodePolyline(ride.routePolyline);
-    let pickupRouteDist = Infinity, dropRouteDist = Infinity;
-
-    if (routePoints.length > 1) {
-      for (let i = 0; i < routePoints.length - 1; i++) {
-        const segDistPickup = distanceToSegment([pickupLat, pickupLng], routePoints[i], routePoints[i+1]);
-        const segDistDrop = distanceToSegment([dropLat, dropLng], routePoints[i], routePoints[i+1]);
-        pickupRouteDist = Math.min(pickupRouteDist, segDistPickup);
-        dropRouteDist = Math.min(dropRouteDist, segDistDrop);
-      }
-      if (debug) console.log(`  Route polyline: ${routePoints.length} points, pickupDist=${pickupRouteDist.toFixed(0)}m, dropDist=${dropRouteDist.toFixed(0)}m`);
-    } else {
-      // Fallback to endpoint matching
-      pickupRouteDist = Math.min(pickupToOrigin, pickupToDest);
-      dropRouteDist = Math.min(dropToOrigin, dropToDest);
-    }
-
-    // 1. ETA / TIME WINDOW CHECK (±15min margin) - now pickupRouteDist is available
-    const etaMinutes = calculateETA(pickupRouteDist, 50);
-    let eta = new Date(requestedTime);
-    eta = new Date(eta.getTime() + etaMinutes * 60 * 1000);
-    
-    if (debug) console.log(`  ETA calc: pickupRouteDist=${pickupRouteDist.toFixed(0)}m, etaMinutes=${etaMinutes}, ETA=${eta.toISOString()}`);
-
-    const timeWindowMarginMin = 15;
-    const windowStart = requestedTimeWindowStart ? new Date(requestedTimeWindowStart) : new Date(requestedTime);
-    const windowEnd = requestedTimeWindowEnd ? new Date(requestedTimeWindowEnd) : new Date(requestedTime);
-    windowStart.setMinutes(windowStart.getMinutes() - timeWindowMarginMin);
-    windowEnd.setMinutes(windowEnd.getMinutes() + timeWindowMarginMin);
-
-    if (eta < windowStart || eta > windowEnd) {
-      if (debug) console.log(`❌ Ride ${ride.id}: ETA ${eta.toISOString()} outside window [${windowStart.toISOString()}, ${windowEnd.toISOString()}]`);
-      continue;
-    }
-
 
     if (debug) {
-      console.log(`Ride ${ride.id}:`);
-      console.log(`  Driver route: (${ride.originLat.toFixed(5)}, ${ride.originLng.toFixed(5)}) → (${ride.destinationLat.toFixed(5)}, ${ride.destinationLng.toFixed(5)}), distance=${rideDistance.toFixed(0)}m`);
-      console.log(`  Passenger: pickup(${pickupLat.toFixed(5)}, ${pickupLng.toFixed(5)}) → drop(${dropLat.toFixed(5)}, ${dropLng.toFixed(5)})`);
-      console.log(`  pickupToOrigin=${pickupToOrigin.toFixed(0)}m, pickupToDest=${pickupToDest.toFixed(0)}m`);
-      console.log(`  dropToOrigin=${dropToOrigin.toFixed(0)}m, dropToDest=${dropToDest.toFixed(0)}m`);
+      console.log(`\n🚗 RIDE ${ride.id}:`);
+      console.log(`  Driver: ${ride.driver.name}`);
+      console.log(`  Route: ${ride.origin} → ${ride.destination}`);
+      console.log(`  Coords: (${ride.originLat}, ${ride.originLng}) → (${ride.destinationLat}, ${ride.destinationLng})`);
+      console.log(`  Time: ${ride.departureTime}`);
+      console.log(`  Seats: ${ride.seats}`);
+      console.log(`  Polyline: ${ride.routePolyline ? "Yes" : "No"}`);
     }
 
-    const maxPolylineTolerance = 5000; // 5km
-    const pickupCloseToRoute = pickupRouteDist <= maxPolylineTolerance;
-    const dropCloseToRoute = dropRouteDist <= maxPolylineTolerance;
-
-    if (!pickupCloseToRoute) {
-      if (debug) console.log(`  ❌ Pickup too far from route polyline (${pickupRouteDist.toFixed(0)}m > ${maxPolylineTolerance}m)`);
-      continue;
-    }
-    if (!dropCloseToRoute) {
-      if (debug) console.log(`  ❌ Drop too far from route polyline (${dropRouteDist.toFixed(0)}m > ${maxPolylineTolerance}m)`);
+    if (!ride.originLat || !ride.destinationLat) {
+      if (debug) console.log("  ❌ REJECTED: Missing coordinates");
       continue;
     }
 
+    let pickupMatch, dropMatch, eta;
 
-    // 3. CHECK: Pickup should come before drop (passenger boards before getting off)
-    // Allow some flexibility - pickup closer to origin, drop closer to destination
-    const pickupBeforeDrop = pickupToOrigin + 1500 <= dropToDest;
+    // Try polyline-based matching first
+    if (ride.routePolyline) {
+      const routePoints = decodePolyline(ride.routePolyline);
 
-    if (!pickupBeforeDrop) {
-      if (debug) console.log(`  ⚠️  Direction check (pickupToOrigin + 1500 > dropToDest), but allowing if both near route...`);
-      // Still allow if both are reasonably close to route
-      if (Math.min(pickupToOrigin, pickupToDest) > 2500 || Math.min(dropToOrigin, dropToDest) > 2500) {
-        if (debug) console.log(`  ❌ Both pickup and drop too far from route`);
+      if (routePoints && routePoints.length >= 2) {
+        // POLYLINE-BASED MATCHING
+        pickupMatch = findClosestPointIndex(
+          [pickupLat, pickupLng],
+          routePoints
+        );
+
+        dropMatch = findClosestPointIndex(
+          [dropLat, dropLng],
+          routePoints
+        );
+
+        if (debug) {
+          console.log(`  Using polyline matching:`);
+          console.log(`    Pickup distance: ${Math.round(pickupMatch.distance)}m`);
+          console.log(`    Drop distance: ${Math.round(dropMatch.distance)}m`);
+        }
+
+        // Distance to route check
+        const MAX_DISTANCE = 2000; // 2km
+
+        if (pickupMatch.distance > MAX_DISTANCE) {
+          if (debug) console.log(`  ❌ REJECTED: Pickup too far from route (${Math.round(pickupMatch.distance)}m > ${MAX_DISTANCE}m)`);
+          continue;
+        }
+        if (dropMatch.distance > MAX_DISTANCE) {
+          if (debug) console.log(`  ❌ REJECTED: Drop too far from route (${Math.round(dropMatch.distance)}m > ${MAX_DISTANCE}m)`);
+          continue;
+        }
+
+        // Direction check (pickup before drop on route)
+        if (pickupMatch.index >= dropMatch.index) {
+          if (debug) console.log(`  ❌ REJECTED: Wrong direction (pickup index ${pickupMatch.index} >= drop index ${dropMatch.index})`);
+          continue;
+        }
+
+        // ETA calculation
+        const distanceFromStart = getDistance(
+          ride.originLat,
+          ride.originLng,
+          routePoints[pickupMatch.index][0],
+          routePoints[pickupMatch.index][1]
+        );
+
+        const etaMinutes = calculateETA(distanceFromStart);
+        eta = new Date(ride.departureTime);
+        eta = new Date(eta.getTime() + etaMinutes * 60000);
+
+        const requested = new Date(requestedTime);
+        const diff = Math.abs(eta - requested) / 60000;
+
+        if (debug) console.log(`    ETA: ${eta}, Diff: ${Math.round(diff)}min`);
+
+        if (diff > 45) {
+          if (debug) console.log(`  ❌ REJECTED: Time mismatch (${Math.round(diff)}min > 45min)`);
+          continue;
+        }
+      } else {
+        // Polyline present but invalid, fallback to distance-based
+        const fallbackMatch = matchRideWithoutPolyline(ride, pickupLat, pickupLng, dropLat, dropLng, requestedTime);
+        if (!fallbackMatch) {
+          if (debug) console.log(`  ❌ REJECTED: Fallback distance matching failed`);
+          continue;
+        }
+        
+        if (debug) {
+          console.log(`  Using fallback distance matching:`);
+          console.log(`    Pickup distance to origin: ${Math.round(fallbackMatch.pickupMatch.distance)}m`);
+          console.log(`    Drop distance to destination: ${Math.round(fallbackMatch.dropMatch.distance)}m`);
+        }
+        
+        pickupMatch = fallbackMatch.pickupMatch;
+        dropMatch = fallbackMatch.dropMatch;
+        eta = fallbackMatch.eta;
+      }
+    } else {
+      // NO POLYLINE - Use fallback distance-based matching
+      const fallbackMatch = matchRideWithoutPolyline(ride, pickupLat, pickupLng, dropLat, dropLng, requestedTime);
+      if (!fallbackMatch) {
+        if (debug) console.log(`  ❌ REJECTED: Distance-based matching failed`);
         continue;
       }
+      
+      if (debug) {
+        console.log(`  Using distance-based matching (no polyline):`);
+        console.log(`    Pickup distance to origin: ${Math.round(fallbackMatch.pickupMatch.distance)}m`);
+        console.log(`    Drop distance to destination: ${Math.round(fallbackMatch.dropMatch.distance)}m`);
+      }
+      
+      pickupMatch = fallbackMatch.pickupMatch;
+      dropMatch = fallbackMatch.dropMatch;
+      eta = fallbackMatch.eta;
     }
 
-    // ALL CHECKS PASSED - THIS IS A MATCH
-    if (debug) console.log(`  ✅ MATCH ACCEPTED\n`);
-
-console.log(`DEBUG: formatRide called with requestedTime=${requestedTime}`);
+    // MATCH FOUND
+    if (debug) console.log(`  ✅ MATCHED!`);
+    
     matches.push({
-      ride: formatRide(pickupLat, pickupLng, dropLat, dropLng, ride, pickupToOrigin, dropToDest, requestedTime, pickupRouteDist, dropRouteDist, eta, ride.driver),
-      pickupDist: pickupRouteDist
+      ride: formatRide(
+        ride,
+        pickupLat,
+        pickupLng,
+        dropLat,
+        dropLng,
+        pickupMatch,
+        dropMatch,
+        eta,
+        pickupName,
+        dropName
+      ),
+      score: pickupMatch.distance
     });
   }
 
+  // Sort best matches
+  matches.sort((a, b) => a.score - b.score);
+
+  const rides_list = matches.map(m => m.ride);
 
   if (debug) {
-    console.log(`========== RESULTS ==========`);
-    console.log(`Matches found: ${matches.length}`);
-    console.log(`=============================\n`);
+    console.log(`\n📊 RESULT: ${rides_list.length} rides matched\n`);
   }
-
-  // Sort by closest pickup
-  matches.sort((a, b) => a.pickupDist - b.pickupDist);
-  const rides_list = matches.map(m => m.ride);
 
   if (rides_list.length > 0) {
     return {
       type: "MATCH",
       message: `Found ${rides_list.length} ride(s)`,
-      rides: rides_list,
-      mapConfig: getMapConfig("MATCH")
+      rides: rides_list
     };
   }
 
   return {
     type: "SOLO_SUGGESTION",
-    message: "No shared rides available for your route.",
+    message: "No shared rides available",
     soloRide: {
-      origin: { lat: pickupLat || 0, lng: pickupLng || 0 },
-      destination: { lat: dropLat || 0, lng: dropLng || 0 },
-      estimatedType: "PRIVATE_RIDE"
-    },
-    mapConfig: getMapConfig("SOLO_SUGGESTION")
+      origin: { lat: pickupLat, lng: pickupLng },
+      destination: { lat: dropLat, lng: dropLng }
+    }
   };
 };

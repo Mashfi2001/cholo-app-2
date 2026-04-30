@@ -13,6 +13,8 @@ class RideSearchLoadingPage extends StatefulWidget {
   final String requestedTime;
   final LatLng pickupLocation;
   final LatLng destinationLocation;
+  final String pickupName;
+  final String dropName;
 
   const RideSearchLoadingPage({
     Key? key,
@@ -23,6 +25,8 @@ class RideSearchLoadingPage extends StatefulWidget {
     required this.requestedTime,
     required this.pickupLocation,
     required this.destinationLocation,
+    required this.pickupName,
+    required this.dropName,
   }) : super(key: key);
 
   @override
@@ -48,7 +52,10 @@ Uri.parse('${backendUrl}/api/ride-search/search'),
           'pickupLng': widget.pickupLng,
           'dropLat': widget.dropLat,
           'dropLng': widget.dropLng,
+          'pickupName': widget.pickupName,
+          'dropName': widget.dropName,
           'requestedTime': widget.requestedTime,
+          'debug': true,
         }),
       );
 

@@ -1,30 +1,60 @@
-# Route Matching, Timing, and Bugfix Implementation TODO
+# Cholo App Development TODO
 
-## Status: [BUGFIX IN PROGRESS] 
+## Completed Fixes
 
-### Approved Bugfix Plan (Confirmed):
-**Identified Error:** ReferenceError: `formatRide` not defined in `backend/src/services/rideSearchService.js`
-- Function called before declaration (JS hoisting issue)
+### driver_list_page.dart Dead Code Fix
+- ✅ Removed duplicate/dead code block appended at end of file causing ~35 parser errors
+- ✅ File now compiles cleanly
 
-**Fix Steps:**
-1. **[PENDING]** Move `formatRide()` and `getMapConfig()` to top of rideSearchService.js
-2. **[PENDING]** Test backend ride search (curl or Postman)
-3. **[PENDING]** Update TODO.md [COMPLETE]
-4. **[PENDING]** Frontend full flow test: `cd frontend && flutter run`
+### Port Alignment
+- ✅ `backend/src/server.js` default port set to 5000 to match frontend expectations
 
-### Original Route Features (Implemented):
+### Error Visibility Improvements
+- ✅ `frontend/lib/driver_list_page.dart` - fetch errors now surfaced via SnackBar
+- ✅ `frontend/lib/user_list_page.dart` - fetch errors now surfaced via SnackBar
+
+---
+
+## Broadcast Messaging System [IMPLEMENTED]
+
+### Backend
+- ✅ `backend/prisma/schema.prisma` - Added `BroadcastMessage` model with fields: id, title, content, type (ANNOUNCEMENT/ALERT/MAINTENANCE), active, createdAt, updatedAt, expiresAt
+- ✅ Ran `npx prisma migrate dev --name add_broadcast_message` and `npx prisma generate`
+- ✅ `backend/src/controllers/broadcastController.js` - Full CRUD: create, list all, list active, toggle active, delete
+- ✅ `backend/src/routes/broadcastRoutes.js` - REST routes mounted at `/api/broadcasts`
+- ✅ `backend/src/app.js` - Imported and mounted broadcastRoutes
+
+### Frontend
+- ✅ `frontend/lib/broadcast_messages_page.dart` - Admin page: create broadcasts with type/title/content, list all with activate/deactivate/delete actions, color-coded by type
+- ✅ `frontend/lib/broadcast_banner.dart` - Reusable widget: fetches active broadcasts, dismissible, tap to expand, color-coded (blue/green for ANNOUNCEMENT, orange for MAINTENANCE, red for ALERT)
+- ✅ `frontend/lib/admin_panel.dart` - Added "Broadcasts" quick-action button navigating to BroadcastMessagesPage
+- ✅ `frontend/lib/user_panel.dart` - Integrated BroadcastBanner at top of dashboard
+- ✅ `frontend/lib/driver_panel.dart` - Integrated BroadcastBanner above the map
+
+### Test Commands
+```bash
+# Backend
+
+cd cholo-app-2/backend && npm start
+
+# Create broadcast
+curl -X POST http://localhost:5000/api/broadcasts \
+  -H "Content-Type: application/json" \
+  -d '{"title":"System Update","content":"New features released!","type":"ANNOUNCEMENT"}'
+
+# List active (for users/drivers)
+curl http://localhost:5000/api/broadcasts/active
+
+# List all (admin)
+curl http://localhost:5000/api/broadcasts
+```
+
+---
+
+## Original Route Features (Implemented):
 - ✅ Schema: routePolyline, currentLat/Lng, routeDistanceKm/DurationMin
 - ✅ Backend: Polyline decode, perpendicular distance matching (5km), ETA calc, time window
 - ✅ Frontend: Driver polyline encode/send, results show ETA/polyline
-
-**Backend Test Commands:**
-```bash
-# Terminal 1 (running): cd cholo-app-2/backend && npm start
-# Terminal 2:
-curl -X POST http://localhost:5000/api/rides -H "Content-Type: application/json" -d '{"driverId":1,"origin":"Mirpur","destination":"Gulshan","originLat":23.8103,"originLng":90.3674,"destinationLat":23.8103,"destinationLng":90.4125,"departureTime":"2024-04-22T10:00:00Z","seats":4,"routePolyline":"actual_encoded_polyline_here"}'
-
-curl -X POST http://localhost:5000/api/ride-search -H "Content-Type: application/json" -d '{"pickupLat":23.81,"pickupLng":90.37,"dropLat":23.81,"dropLng":90.41,"requestedTime":"2024-04-22T10:00:00Z"}'
-```
 
 **To test full flow:**
 1. Backend: `cd cholo-app-2/backend && npm start`

@@ -8,6 +8,8 @@ exports.searchRides = async (req, res) => {
       dropLat,
       dropLng,
       requestedTime,
+      pickupName,
+      dropName,
       debug
     } = req.body;
 
@@ -16,6 +18,8 @@ exports.searchRides = async (req, res) => {
       pickupLng,
       dropLat,
       dropLng,
+      pickupName,
+      dropName,
       requestedTime
     }, debug === true);
 
