@@ -5,6 +5,9 @@ const rideRoutes = require("./routes/rideRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const verificationRoutes = require("./routes/verificationRoutes");
 const rideSearchRoutes = require("./routes/rideSearchRoutes");
+const adminRoutes = require("./routes/adminRoutes");
+const broadcastRoutes = require("./routes/broadcastRoutes");
+const messageRoutes = require("./routes/messageRoutes");
 
 const app = express();
 
@@ -21,6 +24,9 @@ app.use("/api/rides", rideRoutes);
 app.use("/api/ride-search", rideSearchRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/verification", verificationRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/broadcasts", broadcastRoutes);
+app.use("/api/messages", messageRoutes);
 
 // Global error handler for file upload and backend errors
 app.use((err, req, res, next) => {

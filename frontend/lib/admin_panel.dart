@@ -3,6 +3,7 @@ import 'login_screen.dart';
 import 'user_list_page.dart';
 import 'driver_list_page.dart';
 import 'verification_requests_list_page.dart';
+import 'broadcast_messages_page.dart';
 
 class AdminPanel extends StatelessWidget {
   const AdminPanel({Key? key}) : super(key: key);
@@ -115,8 +116,13 @@ class AdminPanel extends StatelessWidget {
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: _buildActionButton('Settings', Icons.settings, () {
-                      // TODO: Settings functionality
+                    child: _buildActionButton('Broadcasts', Icons.campaign, () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const BroadcastMessagesPage(),
+                        ),
+                      );
                     }),
                   ),
                 ],

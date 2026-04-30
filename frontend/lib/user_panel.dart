@@ -122,7 +122,11 @@ class UserPanel extends StatelessWidget {
                       'Book Ride',
                       Icons.directions_car,
                       () {
-                        // TODO: Book ride functionality
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const BookRidePage(),
+                          ),
+                        );
                       },
                     ),
                   ),
