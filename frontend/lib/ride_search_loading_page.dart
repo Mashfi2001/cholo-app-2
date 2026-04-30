@@ -41,7 +41,7 @@ class _RideSearchLoadingPageState extends State<RideSearchLoadingPage> {
   Future<void> _performSearch() async {
     try {
       final response = await http.post(
-        Uri.parse('${backendUrl}/api/rides/search'),
+Uri.parse('${backendUrl}/api/ride-search/search'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'pickupLat': widget.pickupLat,

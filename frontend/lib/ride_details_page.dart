@@ -240,11 +240,11 @@ class RideDetailsPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            Row(
+Row(
               children: List.generate(
-                ride['seats'],
+                (ride['seats'] ?? 1).clamp(0, 10),
                 (index) => Padding(
-                  padding: const EdgeInsets.only(right: 8),
+                  padding: EdgeInsets.only(right: 8),
                   child: Container(
                     width: 40,
                     height: 40,
@@ -255,7 +255,7 @@ class RideDetailsPage extends StatelessWidget {
                         width: 2,
                       ),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.person,
                       size: 20,
                       color: Colors.grey,
