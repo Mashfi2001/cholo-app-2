@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
+import 'SeatSelectionPage.dart';
 
 class NearbyRideDetailsPage extends StatelessWidget {
   final dynamic ride;
@@ -51,7 +52,7 @@ class NearbyRideDetailsPage extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Ride ID: ${ride['id'].toString().substring(0, 8)}',
+                          'Ride ID: ${ride['id']}',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -336,11 +337,13 @@ class NearbyRideDetailsPage extends StatelessWidget {
   }
 
   void _bookRide(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content:
-            Text('Booking ride #${ride['id'].toString().substring(0, 8)}...'),
-        duration: const Duration(seconds: 2),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => SeatSelectionPage(
+          rideId: ride['id'] is int 
+              ? ride['id'] 
+              : int.tryParse(ride['id'].toString()) ?? 0,
+        ),
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'nearby_ride_details_page.dart';
+import 'SeatSelectionPage.dart';
 
 class RideResultsPage extends StatefulWidget {
   final dynamic searchResult;
@@ -268,10 +269,13 @@ class _RideResultsPageState extends State<RideResultsPage> {
                         SizedBox(height: 4),
                         TextButton(
                           onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('View Slots - Coming Soon'),
-                                duration: Duration(seconds: 1),
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => SeatSelectionPage(
+                                  rideId: ride['id'] is int 
+                                      ? ride['id'] 
+                                      : int.tryParse(ride['id'].toString()) ?? 0,
+                                ),
                               ),
                             );
                           },
