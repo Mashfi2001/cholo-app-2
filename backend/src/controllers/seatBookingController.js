@@ -6,6 +6,7 @@ const {
   MIN_TRIP_KM,
 } = require("./fareController");
 const socketHub = require("../lib/socketHub");
+const PENDING_APPROVAL_MARKER = "__PENDING_DRIVER_APPROVAL__";
 
 const parseSeatNumbers = (input) => {
   if (!Array.isArray(input)) return [];
@@ -67,6 +68,7 @@ exports.getSeatsByRide = async (req, res) => {
       const seatNo = index + 1;
       const booking = bookingBySeat.get(seatNo);
       const isMine = Boolean(userId && booking?.userId === userId);
+      const isPending = booking?.paymentMethod === PENDING_APPROVAL_MARKER;
 
       if (!booking) {
         return { seatNo, state: "AVAILABLE", isMine: false, passenger: null, fare: null };
@@ -74,8 +76,15 @@ exports.getSeatsByRide = async (req, res) => {
 
       return {
         seatNo,
-        state: isMine ? "BOOKED_BY_ME" : "BOOKED",
+        state: isPending
+          ? isMine
+            ? "PENDING_BY_ME"
+            : "PENDING"
+          : isMine
+          ? "BOOKED_BY_ME"
+          : "BOOKED",
         isMine,
+        isPending,
         fare: booking.fare,
         passenger: {
           id: booking.user.id,
@@ -109,7 +118,14 @@ exports.getSeatsByRide = async (req, res) => {
       seats,
       bookedSeats: activeBookings.map((booking) => booking.seatNo),
       myBookedSeats: userId
-        ? activeBookings.filter((booking) => booking.userId === userId).map((booking) => booking.seatNo)
+        ? activeBookings
+            .filter((booking) => booking.userId === userId && booking.paymentMethod !== PENDING_APPROVAL_MARKER)
+            .map((booking) => booking.seatNo)
+        : [],
+      myPendingSeats: userId
+        ? activeBookings
+            .filter((booking) => booking.userId === userId && booking.paymentMethod === PENDING_APPROVAL_MARKER)
+            .map((booking) => booking.seatNo)
         : [],
     });
   } catch (err) {
@@ -175,35 +191,45 @@ exports.createSeatBooking = async (req, res) => {
       }
 
       const bookingTotal = unitFare * seatNumbers.length;
+      const rideWithDriver = await tx.ride.findUnique({
+        where: { id: rideId },
+        select: { driverId: true, origin: true, destination: true },
+      });
+      if (!rideWithDriver) throw new Error("RIDE_NOT_FOUND");
       await tx.seatBooking.createMany({
         data: seatNumbers.map((seatNo) => ({
           rideId,
           userId,
           seatNo,
           fare: unitFare,
-          paymentMethod: null,
+          paymentMethod: PENDING_APPROVAL_MARKER,
           paymentPhone: null,
           paidAt: null,
         })),
       });
-
-      const updatedRide = await tx.ride.update({
-        where: { id: rideId },
-        data: { totalFare: { increment: bookingTotal } },
-        select: { totalFare: true },
+      const passenger = await tx.user.findUnique({
+        where: { id: userId },
+        select: { name: true },
+      });
+      await tx.notification.create({
+        data: {
+          userId: rideWithDriver.driverId,
+          type: "INFO",
+          title: "New seat booking request",
+          message: `${passenger?.name || "A passenger"} requested seat ${seatNumbers.sort((a, b) => a - b).join(", ")} for ${rideWithDriver.origin} -> ${rideWithDriver.destination}.`,
+        },
       });
 
       return {
         seats: seatNumbers,
         unitFare,
         bookingTotal,
-        rideTotalFare: Math.ceil(Number(updatedRide.totalFare) || 0),
+        rideTotalFare: null,
       };
     });
 
-    socketHub.emitFareUpdate({ rideId, totalFare: payload.rideTotalFare });
     return res.status(201).json({
-      message: "Seat booking confirmed",
+      message: "Seat booking request sent. Waiting for driver approval.",
       seats: payload.seats,
       unitFare: payload.unitFare,
       bookingTotal: payload.bookingTotal,
@@ -255,7 +281,7 @@ exports.completePayment = async (req, res) => {
   try {
     const payload = await prisma.$transaction(async (tx) => {
       const myBookings = await tx.seatBooking.findMany({
-        where: { rideId, userId, paidAt: null },
+        where: { rideId, userId, paidAt: null, paymentMethod: null },
         select: { id: true, seatNo: true, fare: true },
         orderBy: { seatNo: "asc" },
       });
@@ -300,6 +326,167 @@ exports.completePayment = async (req, res) => {
   } catch (err) {
     if (err.message === "NO_ACTIVE_BOOKINGS") {
       return res.status(404).json({ error: "No active booked seats found for this passenger" });
+    }
+    console.error(err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+exports.getPendingRequestsForDriver = async (req, res) => {
+  const driverId = Number(req.params.driverId);
+  if (!Number.isInteger(driverId)) {
+    return res.status(400).json({ error: "Invalid driverId" });
+  }
+
+  try {
+    const pendingBookings = await prisma.seatBooking.findMany({
+      where: {
+        paidAt: null,
+        paymentMethod: PENDING_APPROVAL_MARKER,
+        ride: { driverId },
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        ride: { select: { id: true, origin: true, destination: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const requestMap = new Map();
+    for (const booking of pendingBookings) {
+      const key = `${booking.rideId}:${booking.userId}`;
+      if (!requestMap.has(key)) {
+        requestMap.set(key, {
+          rideId: booking.rideId,
+          passengerId: booking.userId,
+          passengerName: booking.user?.name || "Passenger",
+          passengerEmail: booking.user?.email || "",
+          origin: booking.ride.origin,
+          destination: booking.ride.destination,
+          seatNumbers: [],
+          requestedAt: booking.createdAt,
+          totalFare: 0,
+        });
+      }
+      const current = requestMap.get(key);
+      current.seatNumbers.push(booking.seatNo);
+      current.totalFare += Math.ceil(Number(booking.fare) || 0);
+      if (booking.createdAt < current.requestedAt) current.requestedAt = booking.createdAt;
+    }
+
+    const requests = Array.from(requestMap.values())
+      .map((item) => ({
+        ...item,
+        seatNumbers: item.seatNumbers.sort((a, b) => a - b),
+      }))
+      .sort((a, b) => new Date(a.requestedAt) - new Date(b.requestedAt));
+
+    return res.json({ requests });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to fetch pending requests" });
+  }
+};
+
+exports.decideSeatBookingRequest = async (req, res) => {
+  const rideId = Number(req.params.rideId);
+  const passengerId = Number(req.params.passengerId);
+  const driverId = Number(req.body.driverId);
+  const decision = String(req.body.decision || "").toUpperCase();
+
+  if (!Number.isInteger(rideId) || !Number.isInteger(passengerId) || !Number.isInteger(driverId)) {
+    return res.status(400).json({ error: "rideId, passengerId and driverId are required" });
+  }
+  if (!["ACCEPT", "REJECT"].includes(decision)) {
+    return res.status(400).json({ error: "decision must be ACCEPT or REJECT" });
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const ride = await tx.ride.findUnique({
+        where: { id: rideId },
+        select: { id: true, driverId: true, origin: true, destination: true, totalFare: true },
+      });
+      if (!ride) throw new Error("RIDE_NOT_FOUND");
+      if (ride.driverId !== driverId) throw new Error("FORBIDDEN");
+
+      const pending = await tx.seatBooking.findMany({
+        where: {
+          rideId,
+          userId: passengerId,
+          paidAt: null,
+          paymentMethod: PENDING_APPROVAL_MARKER,
+        },
+        select: { id: true, seatNo: true, fare: true },
+      });
+      if (!pending.length) throw new Error("NO_PENDING_REQUEST");
+
+      const seatNumbers = pending.map((item) => item.seatNo).sort((a, b) => a - b);
+      const bookingTotal = pending.reduce((sum, item) => sum + (Number(item.fare) || 0), 0);
+      const bookingIds = pending.map((item) => item.id);
+
+      if (decision === "ACCEPT") {
+        await tx.seatBooking.updateMany({
+          where: { id: { in: bookingIds } },
+          data: { paymentMethod: null },
+        });
+        const updatedRide = await tx.ride.update({
+          where: { id: rideId },
+          data: { totalFare: { increment: bookingTotal } },
+          select: { totalFare: true },
+        });
+        await tx.notification.create({
+          data: {
+            userId: passengerId,
+            type: "SUCCESS",
+            title: "Seat request approved",
+            message: `Driver approved your seat request for ${ride.origin} -> ${ride.destination}. Seats ${seatNumbers.join(", ")} are now confirmed.`,
+          },
+        });
+        return {
+          decision,
+          seatNumbers,
+          bookingTotal: Math.ceil(bookingTotal),
+          rideTotalFare: Math.ceil(Number(updatedRide.totalFare) || 0),
+        };
+      }
+
+      await tx.seatBooking.deleteMany({
+        where: { id: { in: bookingIds } },
+      });
+      await tx.notification.create({
+        data: {
+          userId: passengerId,
+          type: "WARNING",
+          title: "Seat request rejected",
+          message: `Driver rejected your seat request for ${ride.origin} -> ${ride.destination}. Please try different seats or another ride.`,
+        },
+      });
+      return {
+        decision,
+        seatNumbers,
+        bookingTotal: Math.ceil(bookingTotal),
+        rideTotalFare: Math.ceil(Number(ride.totalFare) || 0),
+      };
+    });
+
+    if (result.decision === "ACCEPT") {
+      socketHub.emitFareUpdate({ rideId, totalFare: result.rideTotalFare });
+    }
+    return res.json({
+      message:
+        result.decision === "ACCEPT"
+          ? "Seat booking request accepted"
+          : "Seat booking request rejected",
+      ...result,
+    });
+  } catch (err) {
+    if (err.message === "RIDE_NOT_FOUND") return res.status(404).json({ error: "Ride not found" });
+    if (err.message === "FORBIDDEN") {
+      return res.status(403).json({ error: "You are not allowed to manage this ride requests" });
+    }
+    if (err.message === "NO_PENDING_REQUEST") {
+      return res.status(404).json({ error: "No pending request found for this passenger" });
     }
     console.error(err);
     return res.status(500).json({ error: "Internal server error" });

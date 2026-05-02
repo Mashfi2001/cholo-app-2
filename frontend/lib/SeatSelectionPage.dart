@@ -19,6 +19,7 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
   int totalSeats = 0;
   List<int> bookedSeats = [];
   List<int> myBookedSeats = [];
+  List<int> myPendingSeats = [];
   bool isLoading = false;
   bool isConfirming = false;
   bool isProcessingPayment = false;
@@ -47,6 +48,7 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
         totalSeats = data["totalSeats"];
         bookedSeats = List<int>.from(data["bookedSeats"]);
         myBookedSeats = List<int>.from(data["myBookedSeats"] ?? []);
+        myPendingSeats = List<int>.from(data["myPendingSeats"] ?? []);
         selectedSeats.removeWhere((seat) => bookedSeats.contains(seat));
         unitPassengerFare = u == null
             ? null
@@ -64,7 +66,7 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
   }
 
   void onSeatTapped(int seatNo) {
-    if (bookedSeats.contains(seatNo) || myBookedSeats.isNotEmpty) return;
+    if (bookedSeats.contains(seatNo) || myBookedSeats.isNotEmpty || myPendingSeats.isNotEmpty) return;
     setState(() {
       if (selectedSeats.contains(seatNo)) {
         selectedSeats.remove(seatNo);
@@ -84,6 +86,11 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
     if (myBookedSeats.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text("Booking already confirmed for this ride")));
+      return;
+    }
+    if (myPendingSeats.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Your request is pending driver approval")));
       return;
     }
 
@@ -114,8 +121,8 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
             ? null
             : (paid is num ? paid.ceil() : int.tryParse(paid.toString()));
         final msg = paid != null
-            ? "Seats ${bookedNow.join(", ")} booked — $paidInt Taka total"
-            : "Seats ${bookedNow.join(", ")} booked";
+            ? "Seat request sent for ${bookedNow.join(", ")} — $paidInt Taka (awaiting driver approval)"
+            : "Seat request sent for ${bookedNow.join(", ")} (awaiting driver approval)";
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
         setState(() => selectedSeats.clear());
         await fetchSeats();
@@ -393,7 +400,7 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
                     _buildFareCard(),
                     _buildLegend(),
                     Expanded(child: _buildCarLayout()),
-                    if (myBookedSeats.isEmpty) _buildBottomBar(),
+                    if (myBookedSeats.isEmpty && myPendingSeats.isEmpty) _buildBottomBar(),
                   ],
                 ),
     );
@@ -475,6 +482,8 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
           _legendDot(const Color(0xFFF98825), "Selected"),
           const SizedBox(width: 14),
           _legendDot(const Color(0xFF3B82F6), "Booked"),
+          const SizedBox(width: 14),
+          _legendDot(const Color(0xFFF59E0B), "Pending"),
           if (myBookedSeats.isNotEmpty) ...[
             const SizedBox(width: 14),
             _legendDot(const Color(0xFF16A34A), "Yours"),
@@ -647,6 +656,10 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
                   const SizedBox(height: 18),
                   _buildMyBookedBanner(),
                 ],
+                if (myPendingSeats.isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  _buildMyPendingBanner(),
+                ],
               ],
             ),
           ),
@@ -710,8 +723,9 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
 
     final isBooked = bookedSeats.contains(seatNo);
     final isMine = myBookedSeats.contains(seatNo);
+    final isMinePending = myPendingSeats.contains(seatNo);
     final isSelected = selectedSeats.contains(seatNo);
-    final canTap = !isBooked && !isMine;
+    final canTap = !isBooked && !isMine && !isMinePending;
 
     Color bgColor;
     Color textColor;
@@ -720,6 +734,9 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
 
     if (isMine) {
       bgColor = const Color(0xFF16A34A);
+      textColor = Colors.white;
+    } else if (isMinePending) {
+      bgColor = const Color(0xFFF59E0B);
       textColor = Colors.white;
     } else if (isBooked) {
       bgColor = const Color(0xFF3B82F6);
@@ -838,6 +855,53 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
                     borderRadius: BorderRadius.circular(10)),
                 elevation: 0,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMyPendingBanner() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF59E0B).withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.hourglass_top, color: Color(0xFFD97706), size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Waiting for driver approval",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: Color(0xFF92400E),
+                  ),
+                ),
+                Text(
+                  "Seat ${myPendingSeats.join(", ")} requested. You can pay after driver accepts.",
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFFB45309),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

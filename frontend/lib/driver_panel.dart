@@ -42,6 +42,7 @@ class _DriverPanelState extends State<DriverPanel> {
   bool isSelectingDestination = false;
   final MapController mapController = MapController();
   List<dynamic> notifications = [];
+  List<dynamic> pendingSeatRequests = [];
   bool isNotifLoading = false;
 
 
@@ -122,22 +123,66 @@ class _DriverPanelState extends State<DriverPanel> {
   }
 
   Future<void> fetchNotifications() async {
-    if (Session.userId == null) return;
+    final driverId = widget.userId;
     setState(() => isNotifLoading = true);
     try {
       final response = await http.get(
-        Uri.parse('$backendUrl/api/notifications/user/${Session.userId}'),
+        Uri.parse('$backendUrl/api/notifications/user/$driverId'),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        setState(() {
-          notifications = data['notifications'];
-        });
+        notifications = data['notifications'];
+      }
+
+      final pendingRes = await http.get(
+        Uri.parse('$backendUrl/seat-booking/driver/$driverId/requests'),
+      );
+      if (pendingRes.statusCode == 200) {
+        final pendingData = jsonDecode(pendingRes.body);
+        pendingSeatRequests = List<dynamic>.from(pendingData['requests'] ?? []);
+      }
+      if (mounted) {
+        setState(() {});
       }
     } catch (e) {
       print('Error fetching notifications: $e');
     } finally {
       setState(() => isNotifLoading = false);
+    }
+  }
+
+  Future<void> _decideSeatRequest({
+    required int rideId,
+    required int passengerId,
+    required String decision,
+  }) async {
+    final driverId = widget.userId;
+    try {
+      final response = await http.post(
+        Uri.parse('$backendUrl/seat-booking/requests/$rideId/$passengerId/decision'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'driverId': driverId, 'decision': decision}),
+      );
+      final body = jsonDecode(response.body);
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(body['message']?.toString() ?? 'Request updated')),
+        );
+        await fetchNotifications();
+        Navigator.pop(context);
+        _showNotifications();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(body['error']?.toString() ?? 'Failed to update request')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error updating request: $e')));
     }
   }
 
@@ -148,26 +193,112 @@ class _DriverPanelState extends State<DriverPanel> {
         title: const Text('Notifications'),
         content: SizedBox(
           width: double.maxFinite,
-          child: notifications.isEmpty
-              ? const Center(child: Text('No notifications'))
-              : ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: notifications.length,
-                  itemBuilder: (context, index) {
-                    final n = notifications[index];
-                    return ListTile(
-                      leading: Icon(
-                        n['type'] == 'WARNING' ? Icons.warning : 
-                        n['type'] == 'SUCCESS' ? Icons.check_circle : Icons.info,
-                        color: n['type'] == 'WARNING' ? Colors.orange : 
-                               n['type'] == 'SUCCESS' ? Colors.green : Colors.blue,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (pendingSeatRequests.isNotEmpty) ...[
+                  const Text(
+                    'Seat Booking Requests',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  ...pendingSeatRequests.map((request) {
+                    final seats = List<int>.from(request['seatNumbers'] ?? []);
+                    final rideId = (request['rideId'] as num?)?.toInt() ?? 0;
+                    final passengerId = (request['passengerId'] as num?)?.toInt() ?? 0;
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              request['passengerName']?.toString() ?? 'Passenger',
+                              style: const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${request['origin']} -> ${request['destination']}',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Seats: ${seats.join(", ")}  |  Fare: ${request['totalFare']} Taka',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: rideId <= 0 || passengerId <= 0
+                                        ? null
+                                        : () => _decideSeatRequest(
+                                              rideId: rideId,
+                                              passengerId: passengerId,
+                                              decision: 'REJECT',
+                                            ),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.red,
+                                    ),
+                                    child: const Text('Reject'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: rideId <= 0 || passengerId <= 0
+                                        ? null
+                                        : () => _decideSeatRequest(
+                                              rideId: rideId,
+                                              passengerId: passengerId,
+                                              decision: 'ACCEPT',
+                                            ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    child: const Text('Accept'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                      title: Text(n['title'], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                      subtitle: Text(n['message'], style: const TextStyle(fontSize: 12)),
-                      contentPadding: EdgeInsets.zero,
                     );
-                  },
-                ),
+                  }),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                ],
+                if (notifications.isEmpty && pendingSeatRequests.isEmpty)
+                  const Center(child: Text('No notifications')),
+                ...notifications.map((n) => ListTile(
+                  leading: Icon(
+                    n['type'] == 'WARNING'
+                        ? Icons.warning
+                        : n['type'] == 'SUCCESS'
+                        ? Icons.check_circle
+                        : Icons.info,
+                    color: n['type'] == 'WARNING'
+                        ? Colors.orange
+                        : n['type'] == 'SUCCESS'
+                        ? Colors.green
+                        : Colors.blue,
+                  ),
+                  title: Text(
+                    n['title'],
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text(n['message'], style: const TextStyle(fontSize: 12)),
+                  contentPadding: EdgeInsets.zero,
+                )),
+              ],
+            ),
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
@@ -497,7 +628,11 @@ class _DriverPanelState extends State<DriverPanel> {
             children: [
               IconButton(
                 icon: const Icon(Icons.notifications),
-                onPressed: _showNotifications,
+                onPressed: () async {
+                  await fetchNotifications();
+                  if (!mounted) return;
+                  _showNotifications();
+                },
               ),
               if (notifications.any((n) => n['isRead'] == false))
                 Positioned(
@@ -507,6 +642,19 @@ class _DriverPanelState extends State<DriverPanel> {
                     padding: const EdgeInsets.all(2),
                     decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(6)),
                     constraints: const BoxConstraints(minWidth: 12, minHeight: 12),
+                  ),
+                ),
+              if (pendingSeatRequests.isNotEmpty)
+                Positioned(
+                  right: 6,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(8)),
+                    child: Text(
+                      '${pendingSeatRequests.length}',
+                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
             ],
