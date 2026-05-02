@@ -1,15 +1,105 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
 import 'login_screen.dart';
 import 'verification_request_page.dart';
 import 'book_ride_page.dart';
 import 'broadcast_banner.dart';
+import 'SeatSelectionPage.dart';
+import 'session.dart';
+import 'backend_config.dart';
+import 'passenger_rides_list.dart';
 
-class UserPanel extends StatelessWidget {
+class UserPanel extends StatefulWidget {
   final int userId;
   final String userName;
 
-  const UserPanel({Key? key, required this.userId, required this.userName})
-    : super(key: key);
+  const UserPanel({
+    Key? key,
+    required this.userId,
+    required this.userName,
+  }) : super(key: key);
+
+  @override
+  State<UserPanel> createState() => _UserPanelState();
+}
+
+class _UserPanelState extends State<UserPanel> {
+  List<dynamic> notifications = [];
+  bool isLoading = true;
+  Map<String, dynamic>? userData;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchData();
+  }
+
+  Future<void> fetchData() async {
+    if (Session.userId == null) return;
+
+    setState(() => isLoading = true);
+    try {
+      final notifRes = await http.get(
+        Uri.parse('$backendUrl/api/notifications/user/${Session.userId}'),
+      );
+
+      final userRes = await http.get(
+        Uri.parse(
+          '$backendUrl/api/complaints/passenger/${Session.userId}/history',
+        ),
+      );
+
+      if (notifRes.statusCode == 200 && userRes.statusCode == 200) {
+        final notifBody = jsonDecode(notifRes.body);
+        setState(() {
+          notifications = List<dynamic>.from(notifBody['notifications'] ?? []);
+          userData = jsonDecode(userRes.body) as Map<String, dynamic>;
+          isLoading = false;
+        });
+      } else {
+        setState(() => isLoading = false);
+      }
+    } catch (e) {
+      setState(() => isLoading = false);
+    }
+  }
+
+  void _showNotifications() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Notifications'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: notifications.isEmpty
+              ? const Center(child: Text('No notifications'))
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: notifications.length,
+                  itemBuilder: (context, index) {
+                    final n = notifications[index];
+                    return ListTile(
+                      leading: Icon(
+                        n['type'] == 'WARNING' ? Icons.warning : 
+                        n['type'] == 'SUCCESS' ? Icons.check_circle : Icons.info,
+                        color: n['type'] == 'WARNING' ? Colors.orange : 
+                               n['type'] == 'SUCCESS' ? Colors.green : Colors.blue,
+                      ),
+                      title: Text(n['title'], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                      subtitle: Text(n['message'], style: const TextStyle(fontSize: 12)),
+                      contentPadding: EdgeInsets.zero,
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,171 +116,345 @@ class UserPanel extends StatelessWidget {
         ),
         centerTitle: true,
         elevation: 0,
+        actions: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications, color: Colors.white),
+                onPressed: _showNotifications,
+              ),
+              if (notifications.any((n) => n['isRead'] == false))
+                Positioned(
+                  right: 12,
+                  top: 12,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(6)),
+                    constraints: const BoxConstraints(minWidth: 12, minHeight: 12),
+                  ),
+                ),
+            ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: fetchData,
+          ),
+        ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const BroadcastBanner(),
-              const SizedBox(height: 24),
-              // Logo
-              Image.asset('assets/cholo_logo.png', height: 80),
-              const SizedBox(height: 40),
-
-              // Welcome Title
-              Text(
-                'Welcome to Cholo',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: darkText,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-
-              // Subtitle
-              Text(
-                'Find and book rides with ease',
-                style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 48),
-
-              // User Features List
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: brandOrange.withOpacity(0.2)),
-                ),
+        child: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (userData != null &&
+                        ((userData!['totalWarnings'] ?? 0) > 0 ||
+                            userData!['isBanned'] == true)) ...[
+                      _buildStatusAlert(),
+                      const SizedBox(height: 20),
+                    ],
+                    if (notifications.isNotEmpty) ...[
+                      const Text(
+                        'Notifications',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ...notifications
+                          .take(3)
+                          .map((n) => _buildNotificationCard(n)),
+                      if (notifications.length > 3)
+                        TextButton(
+                          onPressed: () {},
+                          child: const Text('View All Notifications'),
+                        ),
+                      const SizedBox(height: 20),
+                    ],
+                    const BroadcastBanner(),
+                    const SizedBox(height: 24),
+                    Image.asset('assets/cholo_logo.png', height: 80),
+                    const SizedBox(height: 24),
                     Text(
-                      'Available Features',
+                      'Welcome to Cholo, ${widget.userName}',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 28,
                         fontWeight: FontWeight.bold,
                         color: darkText,
                       ),
+                      textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 16),
-                    _buildFeatureItem(
-                      'Book a Ride',
-                      'Find and book rides to your destination',
+                    Text(
+                      'Find and book rides with ease',
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                      textAlign: TextAlign.center,
                     ),
-                    _buildFeatureItem(
-                      'Ride History',
-                      'View your past rides and bookings',
+                    const SizedBox(height: 32),
+                    _buildFeatureSection(brandOrange, darkText),
+                    const SizedBox(height: 32),
+                    const Text(
+                      'Quick Actions',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2C323A),
+                      ),
                     ),
-                    _buildFeatureItem(
-                      'Payment Methods',
-                      'Manage your payment options',
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildActionButton(
+                            'Book Ride',
+                            Icons.directions_car,
+                            () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => const BookRidePage(),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildActionButton(
+                            'My Rides',
+                            Icons.history,
+                            () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const PassengerRidesList(),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
-                    _buildFeatureItem(
-                      'Profile Settings',
-                      'Update your personal information',
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildActionButton(
+                            'Book Seat',
+                            Icons.event_seat,
+                            () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const SeatSelectionPage(rideId: 1),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
-                    _buildFeatureItem(
-                      'Support',
-                      'Get help and contact support',
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildActionButton(
+                            'Profile',
+                            Icons.person,
+                            () {},
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildActionButton(
+                            'Logout',
+                            Icons.logout,
+                            () {
+                              Session.userId = null;
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                  builder: (context) => const LoginScreen(),
+                                ),
+                                (route) => false,
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildActionButton(
+                            'Verify Profile',
+                            Icons.verified_user,
+                            () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      VerificationRequestPage(
+                                    userId: widget.userId,
+                                    userName: widget.userName,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildActionButton(
+                            'Support',
+                            Icons.help,
+                            () {},
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
+      ),
+    );
+  }
 
-              // Quick Actions
-              Text(
-                'Quick Actions',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: darkText,
-                ),
-              ),
-              const SizedBox(height: 16),
+  Widget _buildStatusAlert() {
+    final bool isBanned = userData?['isBanned'] ?? false;
+    final int warnings = userData?['totalWarnings'] ?? 0;
 
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildActionButton(
-                      'Book Ride',
-                      Icons.directions_car,
-                      () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => const BookRidePage(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildActionButton('My Rides', Icons.history, () {
-                      // TODO: Ride history functionality
-                    }),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildActionButton('Profile', Icons.person, () {
-                      // TODO: Profile functionality
-                    }),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildActionButton('Logout', Icons.logout, () {
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(
-                          builder: (context) => const LoginScreen(),
-                        ),
-                        (route) => false,
-                      );
-                    }),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildActionButton(
-                      'Verify Profile',
-                      Icons.verified_user,
-                      () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => VerificationRequestPage(
-                              userId: userId,
-                              userName: userName,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildActionButton('Support', Icons.help, () {
-                      // TODO: Support functionality
-                    }),
-                  ),
-                ],
-              ),
-            ],
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isBanned ? Colors.red.shade50 : Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isBanned ? Colors.red : Colors.orange),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isBanned ? Icons.block : Icons.warning_amber_rounded,
+            color: isBanned ? Colors.red : Colors.orange,
           ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isBanned ? 'ACCOUNT BANNED' : 'ACCOUNT WARNING',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isBanned ? Colors.red : Colors.orange.shade900,
+                  ),
+                ),
+                Text(
+                  isBanned
+                      ? 'Your account has been suspended due to violations.'
+                      : 'You have $warnings warning(s). Please follow platform rules.',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotificationCard(dynamic n) {
+    IconData icon = Icons.info_outline;
+    Color color = Colors.blue;
+
+    if (n['type'] == 'WARNING') {
+      icon = Icons.warning_amber_rounded;
+      color = Colors.orange;
+    } else if (n['type'] == 'DANGER') {
+      icon = Icons.error_outline;
+      color = Colors.red;
+    } else if (n['type'] == 'SUCCESS') {
+      icon = Icons.check_circle_outline;
+      color = Colors.green;
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: color.withOpacity(0.1),
+          child: Icon(icon, color: color, size: 20),
         ),
+        title: Text(
+          n['title'].toString(),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+        subtitle: Text(
+          n['message'].toString(),
+          style: const TextStyle(fontSize: 12),
+        ),
+        trailing: Text(
+          n['createdAt'].toString().length > 10
+              ? n['createdAt'].toString().substring(5, 10)
+              : '',
+          style: const TextStyle(fontSize: 10, color: Colors.grey),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeatureSection(Color brandOrange, Color darkText) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: brandOrange.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Available Features',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: darkText,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildFeatureItem(
+            'Book a Ride',
+            'Find and book rides to your destination',
+          ),
+          _buildFeatureItem(
+            'Ride History',
+            'View your past rides and bookings',
+          ),
+          _buildFeatureItem(
+            'Payment Methods',
+            'Manage your payment options',
+          ),
+          _buildFeatureItem(
+            'Profile Settings',
+            'Update your personal information',
+          ),
+          _buildFeatureItem(
+            'Support',
+            'Get help and contact support',
+          ),
+          _buildFeatureItem(
+            'Seat Booking',
+            'Pick a seat on rides you joined',
+          ),
+        ],
       ),
     );
   }
@@ -199,9 +463,8 @@ class UserPanel extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.check_circle, color: const Color(0xFFF98825), size: 20),
+          const Icon(Icons.check_circle, color: Color(0xFFF98825), size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -216,7 +479,7 @@ class UserPanel extends StatelessWidget {
                 ),
                 Text(
                   description,
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  style: const TextStyle(color: Colors.grey, fontSize: 14),
                 ),
               ],
             ),
@@ -231,12 +494,10 @@ class UserPanel extends StatelessWidget {
     IconData icon,
     VoidCallback onPressed,
   ) {
-    final Color brandOrange = const Color(0xFFF98825);
-
     return ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: brandOrange,
+        backgroundColor: const Color(0xFFF98825),
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

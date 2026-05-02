@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
-import 'ride_details_page.dart';
+import 'nearby_ride_details_page.dart';
 
 class RideResultsPage extends StatefulWidget {
   final dynamic searchResult;
@@ -138,7 +138,7 @@ class _RideResultsPageState extends State<RideResultsPage> {
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (context) => RideDetailsPage(
+            builder: (context) => NearbyRideDetailsPage(
               ride: ride,
               pickupLocation: widget.pickupLocation,
               destinationLocation: widget.destinationLocation,

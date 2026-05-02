@@ -1,7 +1,0 @@
--- AlterTable
-ALTER TABLE "Ride" ADD COLUMN     "destinationLat" DOUBLE PRECISION,
-ADD COLUMN     "destinationLng" DOUBLE PRECISION,
-ADD COLUMN     "originLat" DOUBLE PRECISION,
-ADD COLUMN     "originLng" DOUBLE PRECISION,
-ADD COLUMN     "routeDistanceKm" DOUBLE PRECISION,
-ADD COLUMN     "routeDurationMin" DOUBLE PRECISION;

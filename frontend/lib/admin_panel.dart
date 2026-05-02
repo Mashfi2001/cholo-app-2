@@ -4,6 +4,8 @@ import 'user_list_page.dart';
 import 'driver_list_page.dart';
 import 'verification_requests_list_page.dart';
 import 'broadcast_messages_page.dart';
+import 'session.dart';
+import 'complaints_page.dart';
 
 class AdminPanel extends StatelessWidget {
   const AdminPanel({Key? key}) : super(key: key);
@@ -86,7 +88,7 @@ class AdminPanel extends StatelessWidget {
                       'Analytics',
                       'View application statistics',
                     ),
-                    _buildFeatureItem('Reports', 'Generate and view reports'),
+                    _buildFeatureItem('Complaints', 'View and manage complaints'),
                     _buildFeatureItem(
                       'Content Management',
                       'Manage app content',
@@ -132,13 +134,17 @@ class AdminPanel extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: _buildActionButton('Reports', Icons.analytics, () {
-                      // TODO: Reports functionality
+                    child: _buildActionButton('Manage Complaints', Icons.analytics, () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ComplaintsPage()),
+                      );
                     }),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: _buildActionButton('Logout', Icons.logout, () {
+                      Session.userId = null;
                       Navigator.of(context).pushAndRemoveUntil(
                         MaterialPageRoute(
                           builder: (context) => const LoginScreen(),

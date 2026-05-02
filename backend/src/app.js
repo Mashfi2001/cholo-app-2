@@ -2,12 +2,16 @@ const express = require("express");
 const cors = require("cors");
 const authRoutes = require("./routes/authRoutes");
 const rideRoutes = require("./routes/rideRoutes");
+const fareRoutes = require("./routes/fareRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const verificationRoutes = require("./routes/verificationRoutes");
 const rideSearchRoutes = require("./routes/rideSearchRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const broadcastRoutes = require("./routes/broadcastRoutes");
 const messageRoutes = require("./routes/messageRoutes");
+const seatBookingRoutes = require("./routes/seatBookingRoutes");
+const complaintRoutes = require("./routes/complaintRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 
 const app = express();
 
@@ -22,7 +26,11 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/rides", rideRoutes);
 app.use("/api/ride-search", rideSearchRoutes);
+app.use("/api/fares", fareRoutes);
 app.use("/api/bookings", bookingRoutes);
+app.use("/seat-booking", seatBookingRoutes);
+app.use("/api/complaints", complaintRoutes);
+app.use("/api/notifications", notificationRoutes);
 app.use("/api/verification", verificationRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/broadcasts", broadcastRoutes);

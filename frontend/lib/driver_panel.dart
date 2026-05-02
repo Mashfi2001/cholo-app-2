@@ -6,6 +6,9 @@ import 'package:latlong2/latlong.dart';
 import 'backend_config.dart';
 import 'login_screen.dart';
 import 'verification_request_page.dart';
+import 'ride_details_page.dart';
+import 'my_rides_page_driver.dart';
+import 'session.dart';
 
 class DriverPanel extends StatefulWidget {
   final int userId;
@@ -39,6 +42,9 @@ class _DriverPanelState extends State<DriverPanel> {
   bool isSelectingOrigin = false;
   bool isSelectingDestination = false;
   final MapController mapController = MapController();
+  List<dynamic> notifications = [];
+  bool isNotifLoading = false;
+
 
   LatLng? startLocation;
   LatLng? endLocation;
@@ -50,10 +56,124 @@ class _DriverPanelState extends State<DriverPanel> {
   bool get canShowCreate => rideId == null;
   bool get canShowPlannedActions => rideId != null && rideStatus == "PLANNED";
 
+  int minEstimatedFare = 0;
+  int maxEstimatedFare = 0;
+  bool isFareEstimateLoading = false;
+
+  Future<void> _fetchFareEstimatesFromBackend() async {
+    if (routeDistanceKm == null) {
+      minEstimatedFare = 0;
+      maxEstimatedFare = 0;
+      return;
+    }
+    final seatCount = int.tryParse(seatsController.text.trim()) ?? 0;
+    if (seatCount <= 0) {
+      minEstimatedFare = 0;
+      maxEstimatedFare = 0;
+      return;
+    }
+    if (mounted) {
+      setState(() => isFareEstimateLoading = true);
+    }
+    try {
+      final res = await http.post(
+        Uri.parse('${backendUrl}/api/fares/estimate'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'routeDistanceKm': routeDistanceKm,
+          'seats': seatCount,
+        }),
+      );
+      if (!mounted) return;
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        setState(() {
+          minEstimatedFare = (data['minFare'] is num)
+              ? (data['minFare'] as num).toInt()
+              : int.tryParse(data['minFare']?.toString() ?? '0') ?? 0;
+          maxEstimatedFare = (data['maxFare'] is num)
+              ? (data['maxFare'] as num).toInt()
+              : int.tryParse(data['maxFare']?.toString() ?? '0') ?? 0;
+        });
+      } else {
+        setState(() {
+          minEstimatedFare = 0;
+          maxEstimatedFare = 0;
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        minEstimatedFare = 0;
+        maxEstimatedFare = 0;
+      });
+    } finally {
+      if (mounted) {
+        setState(() => isFareEstimateLoading = false);
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     seatsController.text = "4";
+    fetchNotifications();
+  }
+
+  Future<void> fetchNotifications() async {
+    if (Session.userId == null) return;
+    setState(() => isNotifLoading = true);
+    try {
+      final response = await http.get(
+        Uri.parse('$backendUrl/api/notifications/user/${Session.userId}'),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          notifications = data['notifications'];
+        });
+      }
+    } catch (e) {
+      print('Error fetching notifications: $e');
+    } finally {
+      setState(() => isNotifLoading = false);
+    }
+  }
+
+  void _showNotifications() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Notifications'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: notifications.isEmpty
+              ? const Center(child: Text('No notifications'))
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: notifications.length,
+                  itemBuilder: (context, index) {
+                    final n = notifications[index];
+                    return ListTile(
+                      leading: Icon(
+                        n['type'] == 'WARNING' ? Icons.warning : 
+                        n['type'] == 'SUCCESS' ? Icons.check_circle : Icons.info,
+                        color: n['type'] == 'WARNING' ? Colors.orange : 
+                               n['type'] == 'SUCCESS' ? Colors.green : Colors.blue,
+                      ),
+                      title: Text(n['title'], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                      subtitle: Text(n['message'], style: const TextStyle(fontSize: 12)),
+                      contentPadding: EdgeInsets.zero,
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
   }
 
   Future<String> reverseGeocode(LatLng point) async {
@@ -141,6 +261,17 @@ class _DriverPanelState extends State<DriverPanel> {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        if (data['features'] == null || (data['features'] as List).isEmpty) {
+          if (!mounted) return;
+          setState(() {
+            routePoints = [];
+            routeDistanceKm = 0;
+            routeDurationMin = 0;
+            minEstimatedFare = 0;
+            maxEstimatedFare = 0;
+          });
+          return;
+        }
         final coordinates = data['features'][0]['geometry']['coordinates'];
         final summary = data['features'][0]['properties']['summary'];
 
@@ -148,8 +279,18 @@ class _DriverPanelState extends State<DriverPanel> {
           routePoints = coordinates
               .map<LatLng>((coord) => LatLng(coord[1], coord[0]))
               .toList();
-          routeDistanceKm = summary[0] / 1000;
-          routeDurationMin = summary[1] / 60;
+          routeDistanceKm = summary['distance'] / 1000;
+          routeDurationMin = summary['duration'] / 60;
+        });
+        await _fetchFareEstimatesFromBackend();
+      } else {
+        if (!mounted) return;
+        setState(() {
+          routePoints = [];
+          routeDistanceKm = 0;
+          routeDurationMin = 0;
+          minEstimatedFare = 0;
+          maxEstimatedFare = 0;
         });
       }
     } catch (e) {
@@ -365,7 +506,7 @@ class _DriverPanelState extends State<DriverPanel> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
+            appBar: AppBar(
         backgroundColor: brandOrange,
         title: const Text(
           'Driver Panel',
@@ -374,6 +515,37 @@ class _DriverPanelState extends State<DriverPanel> {
         centerTitle: true,
         elevation: 0,
         actions: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications),
+                onPressed: _showNotifications,
+              ),
+              if (notifications.any((n) => n['isRead'] == false))
+                Positioned(
+                  right: 12,
+                  top: 12,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(6)),
+                    constraints: const BoxConstraints(minWidth: 12, minHeight: 12),
+                  ),
+                ),
+            ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.list),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const MyRidesPageDriver(),
+                ),
+              );
+            },
+            tooltip: 'My rides',
+          ),
           IconButton(
             icon: const Icon(Icons.verified_user),
             onPressed: () => Navigator.of(context).push(
@@ -389,6 +561,7 @@ class _DriverPanelState extends State<DriverPanel> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
+              Session.userId = null;
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (context) => const LoginScreen()),
                 (route) => false,
@@ -607,6 +780,7 @@ class _DriverPanelState extends State<DriverPanel> {
                         border: OutlineInputBorder(),
                       ),
                       keyboardType: TextInputType.number,
+                      onChanged: (_) => _fetchFareEstimatesFromBackend(),
                     ),
                     const SizedBox(height: 16),
                     if (routeDistanceKm != null && routeDurationMin != null)
@@ -614,6 +788,23 @@ class _DriverPanelState extends State<DriverPanel> {
                         'Distance: ${routeDistanceKm!.toStringAsFixed(1)} km, Duration: ${routeDurationMin!.toStringAsFixed(0)} min',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
+                    if (routeDistanceKm != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Est. minimum total: $minEstimatedFare Taka',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      Text(
+                        'Est. maximum total: $maxEstimatedFare Taka',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      if (isFareEstimateLoading)
+                        const SizedBox(
+                          height: 14,
+                          width: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                    ],
                     const SizedBox(height: 16),
                     if (canShowCreate)
                       ElevatedButton(
@@ -650,6 +841,33 @@ class _DriverPanelState extends State<DriverPanel> {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => RideDetailsPage(
+                              ride: {
+                                "id": rideId,
+                                "origin": originController.text,
+                                "destination": destinationController.text,
+                                "routeDistanceKm": routeDistanceKm,
+                                "routeDurationMin": routeDurationMin,
+                                "departureTime": departureController.text,
+                                "seats": seatsController.text,
+                                "status": rideStatus,
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                      ),
+                      child: const Text("View Ride Details"),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
@@ -724,6 +942,8 @@ class _DriverPanelState extends State<DriverPanel> {
         routePoints = [];
         routeDistanceKm = null;
         routeDurationMin = null;
+        minEstimatedFare = 0;
+        maxEstimatedFare = 0;
         originController.text = "Loading place...";
         destinationController.clear();
       });
@@ -755,6 +975,8 @@ class _DriverPanelState extends State<DriverPanel> {
         routePoints = [];
         routeDistanceKm = null;
         routeDurationMin = null;
+        minEstimatedFare = 0;
+        maxEstimatedFare = 0;
         originController.text = "Loading place...";
         destinationController.clear();
       });

@@ -5,6 +5,10 @@ import 'admin_panel.dart';
 import 'backend_config.dart';
 import 'driver_panel.dart';
 import 'user_panel.dart';
+import 'session.dart'; 
+import 'driver_dashboard.dart';  
+
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -51,16 +55,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        final user = data['user'];
+        final dynamic rawId = user['id'];
+        final int userId =
+            rawId is int ? rawId : int.parse(rawId.toString());
+        Session.userId = userId;
+        final String userName = user['name'] ?? 'User';
+
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Welcome ${data['user']['name']}!')),
+          SnackBar(content: Text('Welcome $userName!')),
         );
 
-        // Navigate based on user role
-        final String userRole = data['user']['role'];
-        final int userId = data['user']['id'] is int
-            ? data['user']['id']
-            : int.parse(data['user']['id'].toString());
-        final String userName = data['user']['name'] ?? 'User';
+        final String userRole = user['role'];
 
         if (userRole == 'ADMIN') {
           Navigator.of(context).pushReplacement(
@@ -69,8 +75,10 @@ class _LoginScreenState extends State<LoginScreen> {
         } else if (userRole == 'DRIVER') {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (context) =>
-                  DriverPanel(userId: userId, userName: userName),
+              builder: (context) => DriverDashboard(
+                userId: userId,
+                userName: userName,
+              ),
             ),
           );
         } else {
