@@ -215,3 +215,37 @@ exports.startRide = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+exports.completeRide = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    const existingRide = await prisma.ride.findUnique({
+      where: { id },
+    });
+
+    if (!existingRide) {
+      return res.status(404).json({ message: "Ride not found" });
+    }
+
+    if (existingRide.status !== "ONGOING") {
+      return res.status(400).json({
+        message: "Only an ongoing ride can be completed.",
+      });
+    }
+
+    const completedRide = await prisma.ride.update({
+      where: { id },
+      data: {
+        status: "COMPLETED",
+      },
+    });
+
+    res.json({
+      message: "Ride completed successfully",
+      ride: completedRide,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

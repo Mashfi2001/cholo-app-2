@@ -7,6 +7,7 @@ import 'backend_config.dart';
 import 'login_screen.dart';
 import 'verification_request_page.dart';
 import 'ride_details_page.dart';
+import 'ride_summary_page.dart';
 import 'my_rides_page_driver.dart';
 import 'session.dart';
 
@@ -53,6 +54,7 @@ class _DriverPanelState extends State<DriverPanel> {
   bool get canEdit => rideStatus == "NOT_CREATED" || rideStatus == "PLANNED";
   bool get canShowCreate => rideId == null;
   bool get canShowPlannedActions => rideId != null && rideStatus == "PLANNED";
+  bool get canShowOngoingActions => rideId != null && rideStatus == "ONGOING";
 
   int minEstimatedFare = 0;
   int maxEstimatedFare = 0;
@@ -405,6 +407,42 @@ class _DriverPanelState extends State<DriverPanel> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error cancelling ride: $e')));
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> completeRide() async {
+    if (rideId == null) return;
+
+    setState(() => isLoading = true);
+
+    try {
+      final response = await http.put(
+        Uri.parse('$backendUrl/api/rides/$rideId/complete'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          rideStatus = 'COMPLETED';
+        });
+        
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => RideSummaryPage(ride: data['ride']),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to complete ride')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error ending ride: $e')),
+      );
     } finally {
       setState(() => isLoading = false);
     }
@@ -782,7 +820,21 @@ class _DriverPanelState extends State<DriverPanel> {
                       ],
                     ),
                     const SizedBox(height: 10),
+                  ],
 
+                  if (canShowOngoingActions) ...[
+                    ElevatedButton(
+                      onPressed: isLoading ? null : completeRide,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        minimumSize: const Size(double.infinity, 50),
+                      ),
+                      child: const Text('End Ride', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+
+                  if (rideId != null) ...[
                     ElevatedButton(
                       onPressed: () {
                         Navigator.push(
@@ -798,6 +850,7 @@ class _DriverPanelState extends State<DriverPanel> {
                                 "departureTime": departureController.text,
                                 "seats": seatsController.text,
                                 "status": rideStatus,
+                                "driverId": widget.userId,
                               },
                             ),
                           ),
@@ -809,7 +862,6 @@ class _DriverPanelState extends State<DriverPanel> {
                       child: const Text("View Ride Details"),
                     ),
                     const SizedBox(height: 16),
-                    // Booking requests logic has been removed. Seat bookings are viewed in Ride Details.
                   ],
                 ],
               ),

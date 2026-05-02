@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import 'backend_config.dart';
 import 'session.dart';
+import 'ride_summary_page.dart';
 
 import 'package:intl/intl.dart';
 
@@ -428,8 +429,43 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
     );
   }
 
+  Future<void> completeRide() async {
+    if (rideId == null) return;
+
+    setState(() => isLoading = true);
+
+    try {
+      final response = await http.put(
+        Uri.parse('$backendUrl/api/rides/$rideId/complete'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => RideSummaryPage(ride: data['ride']),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to complete ride')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error ending ride: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    bool isDriver = Session.userId == widget.ride['driverId'];
+    bool isOngoing = widget.ride['status'] == 'ONGOING';
+
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
@@ -460,6 +496,18 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (isDriver && isOngoing) ...[
+              ElevatedButton(
+                onPressed: isLoading ? null : completeRide,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('End Ride', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 12),
+            ],
             _buildRouteInfoCard(),
             const SizedBox(height: 12),
             _buildEarningsCard(),
