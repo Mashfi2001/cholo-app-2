@@ -30,9 +30,7 @@ class _DriverPanelState extends State<DriverPanel> {
   int? rideId;
   String rideStatus = "NOT_CREATED";
   bool isLoading = false;
-  bool isBookingLoading = false;
   DateTime? selectedDepartureTime;
-  List<Map<String, dynamic>> bookingRequests = [];
   List<LatLng> routePoints = [];
   double? routeDistanceKm;
   double? routeDurationMin;
@@ -301,12 +299,12 @@ class _DriverPanelState extends State<DriverPanel> {
   }
 
   Future<void> createRide() async {
-    if (startLocation == null ||
-        endLocation == null ||
+    if (originController.text.isEmpty ||
+        destinationController.text.isEmpty ||
         selectedDepartureTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select locations and departure time'),
+          content: Text('Please provide origin, destination, and departure time'),
         ),
       );
       return;
@@ -316,20 +314,20 @@ class _DriverPanelState extends State<DriverPanel> {
 
     try {
       final response = await http.post(
-        Uri.parse('${backendUrl}/api/rides'),
+        Uri.parse('$backendUrl/api/rides'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'driverId': widget.userId,
           'origin': originController.text,
           'destination': destinationController.text,
-          'originLat': startLocation!.latitude,
-          'originLng': startLocation!.longitude,
-          'destinationLat': endLocation!.latitude,
-          'destinationLng': endLocation!.longitude,
+          'originLat': startLocation?.latitude,
+          'originLng': startLocation?.longitude,
+          'destinationLat': endLocation?.latitude,
+          'destinationLng': endLocation?.longitude,
           'routeDistanceKm': routeDistanceKm,
           'routeDurationMin': routeDurationMin,
           'departureTime': selectedDepartureTime!.toIso8601String(),
-          'seats': int.parse(seatsController.text),
+          'seats': int.tryParse(seatsController.text) ?? 4,
         }),
       );
 
@@ -363,7 +361,7 @@ class _DriverPanelState extends State<DriverPanel> {
 
     try {
       final response = await http.put(
-        Uri.parse('${backendUrl}/api/rides/$rideId/start'),
+        Uri.parse('$backendUrl/api/rides/$rideId/start'),
       );
 
       if (response.statusCode == 200) {
@@ -388,7 +386,7 @@ class _DriverPanelState extends State<DriverPanel> {
 
     try {
       final response = await http.put(
-        Uri.parse('${backendUrl}/api/rides/$rideId/cancel'),
+        Uri.parse('$backendUrl/api/rides/$rideId/cancel'),
       );
 
       if (response.statusCode == 200) {
@@ -409,65 +407,6 @@ class _DriverPanelState extends State<DriverPanel> {
       ).showSnackBar(SnackBar(content: Text('Error cancelling ride: $e')));
     } finally {
       setState(() => isLoading = false);
-    }
-  }
-
-  Future<void> fetchBookingRequests() async {
-    if (rideId == null) return;
-
-    setState(() => isBookingLoading = true);
-
-    try {
-      final response = await http.get(
-        Uri.parse('${backendUrl}/api/bookings/ride/$rideId'),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        setState(() => bookingRequests = List<Map<String, dynamic>>.from(data));
-      }
-    } catch (e) {
-      print('Error fetching bookings: $e');
-    } finally {
-      setState(() => isBookingLoading = false);
-    }
-  }
-
-  Future<void> acceptBooking(int bookingId) async {
-    try {
-      final response = await http.put(
-        Uri.parse('${backendUrl}/api/bookings/$bookingId/accept'),
-      );
-
-      if (response.statusCode == 200) {
-        await fetchBookingRequests();
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Booking accepted')));
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error accepting booking: $e')));
-    }
-  }
-
-  Future<void> rejectBooking(int bookingId) async {
-    try {
-      final response = await http.put(
-        Uri.parse('${backendUrl}/api/bookings/$bookingId/reject'),
-      );
-
-      if (response.statusCode == 200) {
-        await fetchBookingRequests();
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Booking rejected')));
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error rejecting booking: $e')));
     }
   }
 
@@ -870,53 +809,7 @@ class _DriverPanelState extends State<DriverPanel> {
                       child: const Text("View Ride Details"),
                     ),
                     const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: fetchBookingRequests,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: brandOrange,
-                      ),
-                      child: isBookingLoading
-                          ? const CircularProgressIndicator()
-                          : const Text('Check Booking Requests'),
-                    ),
-                    if (bookingRequests.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Booking Requests:',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      ...bookingRequests.map(
-                        (request) => Card(
-                          child: ListTile(
-                            title: Text(request['passenger']['name']),
-                            subtitle: Text('Status: ${request['status']}'),
-                            trailing: request['status'] == 'PENDING'
-                                ? Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.check,
-                                          color: Colors.green,
-                                        ),
-                                        onPressed: () =>
-                                            acceptBooking(request['id']),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.close,
-                                          color: Colors.red,
-                                        ),
-                                        onPressed: () =>
-                                            rejectBooking(request['id']),
-                                      ),
-                                    ],
-                                  )
-                                : null,
-                          ),
-                        ),
-                      ),
-                    ],
+                    // Booking requests logic has been removed. Seat bookings are viewed in Ride Details.
                   ],
                 ],
               ),
