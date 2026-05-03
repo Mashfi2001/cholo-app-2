@@ -6,10 +6,11 @@ import 'package:latlong2/latlong.dart';
 import 'backend_config.dart';
 import 'login_screen.dart';
 import 'verification_request_page.dart';
+import 'my_rides_page_driver.dart';
 import 'ride_details_page.dart';
 import 'ride_summary_page.dart';
-import 'my_rides_page_driver.dart';
 import 'session.dart';
+import 'broadcast_banner.dart';
 
 class DriverPanel extends StatefulWidget {
   final int userId;
@@ -23,6 +24,7 @@ class DriverPanel extends StatefulWidget {
 }
 
 class _DriverPanelState extends State<DriverPanel> {
+  // State from old DriverPanel
   final TextEditingController originController = TextEditingController();
   final TextEditingController destinationController = TextEditingController();
   final TextEditingController departureController = TextEditingController();
@@ -41,10 +43,6 @@ class _DriverPanelState extends State<DriverPanel> {
   bool isSelectingOrigin = false;
   bool isSelectingDestination = false;
   final MapController mapController = MapController();
-  List<dynamic> notifications = [];
-  List<dynamic> pendingSeatRequests = [];
-  bool isNotifLoading = false;
-
 
   LatLng? startLocation;
   LatLng? endLocation;
@@ -52,402 +50,150 @@ class _DriverPanelState extends State<DriverPanel> {
   final String openRouteServiceApiKey =
       "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImU0YzRiNTY2MGNjMjRmYjI5ZjE3ZTFiMGFmMGNiZWUzIiwiaCI6Im11cm11cjY0In0=";
 
-  bool get canEdit => rideStatus == "NOT_CREATED" || rideStatus == "PLANNED";
-  bool get canShowCreate => rideId == null;
-  bool get canShowPlannedActions => rideId != null && rideStatus == "PLANNED";
-  bool get canShowOngoingActions => rideId != null && rideStatus == "ONGOING";
-
   int minEstimatedFare = 0;
   int maxEstimatedFare = 0;
   bool isFareEstimateLoading = false;
 
-  Future<void> _fetchFareEstimatesFromBackend() async {
-    if (routeDistanceKm == null) {
-      minEstimatedFare = 0;
-      maxEstimatedFare = 0;
-      return;
-    }
-    final seatCount = int.tryParse(seatsController.text.trim()) ?? 0;
-    if (seatCount <= 0) {
-      minEstimatedFare = 0;
-      maxEstimatedFare = 0;
-      return;
-    }
-    if (mounted) {
-      setState(() => isFareEstimateLoading = true);
-    }
-    try {
-      final res = await http.post(
-        Uri.parse('${backendUrl}/api/fares/estimate'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'routeDistanceKm': routeDistanceKm,
-          'seats': seatCount,
-        }),
-      );
-      if (!mounted) return;
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        setState(() {
-          minEstimatedFare = (data['minFare'] is num)
-              ? (data['minFare'] as num).toInt()
-              : int.tryParse(data['minFare']?.toString() ?? '0') ?? 0;
-          maxEstimatedFare = (data['maxFare'] is num)
-              ? (data['maxFare'] as num).toInt()
-              : int.tryParse(data['maxFare']?.toString() ?? '0') ?? 0;
-        });
-      } else {
-        setState(() {
-          minEstimatedFare = 0;
-          maxEstimatedFare = 0;
-        });
-      }
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        minEstimatedFare = 0;
-        maxEstimatedFare = 0;
-      });
-    } finally {
-      if (mounted) {
-        setState(() => isFareEstimateLoading = false);
-      }
-    }
-  }
+  // State from new Dashboard
+  List<dynamic> notifications = [];
+  List<dynamic> pendingSeatRequests = [];
+  Map<String, dynamic>? userData;
+
+  bool get canEdit => rideStatus == "NOT_CREATED" || rideStatus == "PLANNED";
 
   @override
   void initState() {
     super.initState();
     seatsController.text = "4";
-    fetchNotifications();
+    fetchData();
   }
 
-  Future<void> fetchNotifications() async {
-    final driverId = widget.userId;
-    setState(() => isNotifLoading = true);
+  Future<void> fetchData() async {
+    if (mounted) setState(() => isLoading = true);
     try {
-      final response = await http.get(
-        Uri.parse('$backendUrl/api/notifications/user/$driverId'),
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        notifications = data['notifications'];
+      final driverId = widget.userId;
+      
+      // 1. Notifications
+      final notifRes = await http.get(Uri.parse('$backendUrl/api/notifications/user/$driverId'));
+      if (notifRes.statusCode == 200) {
+        notifications = jsonDecode(notifRes.body)['notifications'] ?? [];
       }
 
-      final pendingRes = await http.get(
-        Uri.parse('$backendUrl/seat-booking/driver/$driverId/requests'),
-      );
+      // 2. Pending Requests
+      final pendingRes = await http.get(Uri.parse('$backendUrl/seat-booking/driver/$driverId/requests'));
       if (pendingRes.statusCode == 200) {
-        final pendingData = jsonDecode(pendingRes.body);
-        pendingSeatRequests = List<dynamic>.from(pendingData['requests'] ?? []);
+        pendingSeatRequests = jsonDecode(pendingRes.body)['requests'] ?? [];
       }
-      if (mounted) {
-        setState(() {});
+
+      // 3. User History (Warnings)
+      final userRes = await http.get(Uri.parse('$backendUrl/api/complaints/passenger/$driverId/history'));
+      if (userRes.statusCode == 200) {
+        userData = jsonDecode(userRes.body);
       }
-    } catch (e) {
-      print('Error fetching notifications: $e');
-    } finally {
-      setState(() => isNotifLoading = false);
-    }
-  }
 
-  Future<void> _decideSeatRequest({
-    required int rideId,
-    required int passengerId,
-    required String decision,
-  }) async {
-    final driverId = widget.userId;
-    try {
-      final response = await http.post(
-        Uri.parse('$backendUrl/seat-booking/requests/$rideId/$passengerId/decision'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'driverId': driverId, 'decision': decision}),
-      );
-      final body = jsonDecode(response.body);
-      if (!mounted) return;
-
-      if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(body['message']?.toString() ?? 'Request updated')),
-        );
-        await fetchNotifications();
-        Navigator.pop(context);
-        _showNotifications();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(body['error']?.toString() ?? 'Failed to update request')),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error updating request: $e')));
-    }
-  }
-
-  void _showNotifications() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Notifications'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (pendingSeatRequests.isNotEmpty) ...[
-                  const Text(
-                    'Seat Booking Requests',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 8),
-                  ...pendingSeatRequests.map((request) {
-                    final seats = List<int>.from(request['seatNumbers'] ?? []);
-                    final rideId = (request['rideId'] as num?)?.toInt() ?? 0;
-                    final passengerId = (request['passengerId'] as num?)?.toInt() ?? 0;
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      child: Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              request['passengerName']?.toString() ?? 'Passenger',
-                              style: const TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${request['origin']} -> ${request['destination']}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Seats: ${seats.join(", ")}  |  Fare: ${request['totalFare']} Taka',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton(
-                                    onPressed: rideId <= 0 || passengerId <= 0
-                                        ? null
-                                        : () => _decideSeatRequest(
-                                              rideId: rideId,
-                                              passengerId: passengerId,
-                                              decision: 'REJECT',
-                                            ),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: Colors.red,
-                                    ),
-                                    child: const Text('Reject'),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: ElevatedButton(
-                                    onPressed: rideId <= 0 || passengerId <= 0
-                                        ? null
-                                        : () => _decideSeatRequest(
-                                              rideId: rideId,
-                                              passengerId: passengerId,
-                                              decision: 'ACCEPT',
-                                            ),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      foregroundColor: Colors.white,
-                                    ),
-                                    child: const Text('Accept'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
-                  const Divider(),
-                  const SizedBox(height: 8),
-                ],
-                if (notifications.isEmpty && pendingSeatRequests.isEmpty)
-                  const Center(child: Text('No notifications')),
-                ...notifications.map((n) => ListTile(
-                  leading: Icon(
-                    n['type'] == 'WARNING'
-                        ? Icons.warning
-                        : n['type'] == 'SUCCESS'
-                        ? Icons.check_circle
-                        : Icons.info,
-                    color: n['type'] == 'WARNING'
-                        ? Colors.orange
-                        : n['type'] == 'SUCCESS'
-                        ? Colors.green
-                        : Colors.blue,
-                  ),
-                  title: Text(
-                    n['title'],
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text(n['message'], style: const TextStyle(fontSize: 12)),
-                  contentPadding: EdgeInsets.zero,
-                )),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-        ],
-      ),
-    );
-  }
-
-  Future<String> reverseGeocode(LatLng point) async {
-    try {
-      final response = await http.get(
-        Uri.parse(
-          'https://api.openrouteservice.org/geocode/reverse?api_key=$openRouteServiceApiKey&point.lon=${point.longitude}&point.lat=${point.latitude}&size=1',
-        ),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['features'] != null && data['features'].isNotEmpty) {
-          return data['features'][0]['properties']['label'] ??
-              'Unknown location';
+      // 4. Current Ride (check if driver has an active ride)
+      final activeRideRes = await http.get(Uri.parse('$backendUrl/api/rides/driver/$driverId/active'));
+      if (activeRideRes.statusCode == 200) {
+        final rideData = jsonDecode(activeRideRes.body)['ride'];
+        if (rideData != null) {
+          rideId = rideData['id'];
+          rideStatus = rideData['status'];
+          originController.text = rideData['origin'];
+          destinationController.text = rideData['destination'];
+          departureController.text = rideData['departureTime'];
+          seatsController.text = rideData['seats'].toString();
+          routeDistanceKm = (rideData['routeDistanceKm'] as num?)?.toDouble();
+          routeDurationMin = (rideData['routeDurationMin'] as num?)?.toDouble();
+          
+          if (rideData['originLat'] != null && rideData['originLng'] != null) {
+            startLocation = LatLng(rideData['originLat'], rideData['originLng']);
+          }
+          if (rideData['destinationLat'] != null && rideData['destinationLng'] != null) {
+            endLocation = LatLng(rideData['destinationLat'], rideData['destinationLng']);
+          }
+          // Note: we might want to fetch route points here if we had them saved, or just leave it blank for now.
         }
       }
     } catch (e) {
-      print('Reverse geocoding error: $e');
+      print('Error fetching data: $e');
+    } finally {
+      if (mounted) setState(() => isLoading = false);
     }
-    return '${point.latitude.toStringAsFixed(4)}, ${point.longitude.toStringAsFixed(4)}';
+  }
+
+  // --- Logic Helpers ---
+
+  Future<void> _fetchFareEstimatesFromBackend() async {
+    if (routeDistanceKm == null) return;
+    final seatCount = int.tryParse(seatsController.text.trim()) ?? 0;
+    if (seatCount <= 0) return;
+    setState(() => isFareEstimateLoading = true);
+    try {
+      final res = await http.post(
+        Uri.parse('${backendUrl}/api/fares/estimate'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'routeDistanceKm': routeDistanceKm, 'seats': seatCount}),
+      );
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        setState(() {
+          minEstimatedFare = (data['minFare'] as num).toInt();
+          maxEstimatedFare = (data['maxFare'] as num).toInt();
+        });
+      }
+    } catch (_) {} finally {
+      if (mounted) setState(() => isFareEstimateLoading = false);
+    }
   }
 
   Future<void> searchLocations(String query, bool isOrigin) async {
     if (query.isEmpty) {
-      setState(() {
-        if (isOrigin) {
-          originSearchResults = [];
-        } else {
-          destinationSearchResults = [];
-        }
-      });
+      setState(() => isOrigin ? originSearchResults = [] : destinationSearchResults = []);
       return;
     }
-
     setState(() => isSearching = true);
-
     try {
-      final response = await http.get(
-        Uri.parse(
-          'https://api.openrouteservice.org/geocode/search?api_key=$openRouteServiceApiKey&text=$query&focus.point.lon=90.4125&focus.point.lat=23.8103&boundary.circle.lon=90.4125&boundary.circle.lat=23.8103&boundary.circle.radius=50',
-        ),
-      );
-
+      final response = await http.get(Uri.parse('https://api.openrouteservice.org/geocode/search?api_key=$openRouteServiceApiKey&text=$query&focus.point.lon=90.4125&focus.point.lat=23.8103'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data['features'] != null) {
-          final results = List<Map<String, dynamic>>.from(
-            data['features'].map(
-              (feature) => {
-                'label': feature['properties']['label'] ?? 'Unknown',
-                'lat': feature['geometry']['coordinates'][1],
-                'lon': feature['geometry']['coordinates'][0],
-              },
-            ),
-          );
-
-          setState(() {
-            if (isOrigin) {
-              originSearchResults = results;
-            } else {
-              destinationSearchResults = results;
-            }
-          });
-        }
+        final results = List<Map<String, dynamic>>.from(data['features'].map((f) => {
+          'label': f['properties']['label'],
+          'lat': f['geometry']['coordinates'][1],
+          'lon': f['geometry']['coordinates'][0],
+        }));
+        setState(() => isOrigin ? originSearchResults = results : destinationSearchResults = results);
       }
-    } catch (e) {
-      print('Location search error: $e');
-    } finally {
+    } catch (_) {} finally {
       setState(() => isSearching = false);
     }
   }
 
   Future<void> fetchRealRoute() async {
     if (startLocation == null || endLocation == null) return;
-
     setState(() => isLoading = true);
-
     try {
-      final response = await http.get(
-        Uri.parse(
-          'https://api.openrouteservice.org/v2/directions/driving-car?api_key=$openRouteServiceApiKey&start=${startLocation!.longitude},${startLocation!.latitude}&end=${endLocation!.longitude},${endLocation!.latitude}',
-        ),
-      );
-
+      final response = await http.get(Uri.parse('https://api.openrouteservice.org/v2/directions/driving-car?api_key=$openRouteServiceApiKey&start=${startLocation!.longitude},${startLocation!.latitude}&end=${endLocation!.longitude},${endLocation!.latitude}'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data['features'] == null || (data['features'] as List).isEmpty) {
-          if (!mounted) return;
-          setState(() {
-            routePoints = [];
-            routeDistanceKm = 0;
-            routeDurationMin = 0;
-            minEstimatedFare = 0;
-            maxEstimatedFare = 0;
-          });
-          return;
-        }
         final coordinates = data['features'][0]['geometry']['coordinates'];
         final summary = data['features'][0]['properties']['summary'];
-
         setState(() {
-          routePoints = coordinates
-              .map<LatLng>((coord) => LatLng(coord[1], coord[0]))
-              .toList();
+          routePoints = coordinates.map<LatLng>((c) => LatLng(c[1], c[0])).toList();
           routeDistanceKm = summary['distance'] / 1000;
           routeDurationMin = summary['duration'] / 60;
         });
         await _fetchFareEstimatesFromBackend();
-      } else {
-        if (!mounted) return;
-        setState(() {
-          routePoints = [];
-          routeDistanceKm = 0;
-          routeDurationMin = 0;
-          minEstimatedFare = 0;
-          maxEstimatedFare = 0;
-        });
       }
-    } catch (e) {
-      print('Route fetching error: $e');
-    } finally {
+    } catch (_) {} finally {
       setState(() => isLoading = false);
     }
   }
 
   Future<void> createRide() async {
-    if (originController.text.isEmpty ||
-        destinationController.text.isEmpty ||
-        selectedDepartureTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please provide origin, destination, and departure time'),
-        ),
-      );
-      return;
-    }
-
+    if (originController.text.isEmpty || destinationController.text.isEmpty || selectedDepartureTime == null) return;
     setState(() => isLoading = true);
-
     try {
-      final response = await http.post(
-        Uri.parse('$backendUrl/api/rides'),
+      final response = await http.post(Uri.parse('$backendUrl/api/rides'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'driverId': widget.userId,
@@ -463,622 +209,306 @@ class _DriverPanelState extends State<DriverPanel> {
           'seats': int.tryParse(seatsController.text) ?? 4,
         }),
       );
-
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
-        setState(() {
-          rideId = data['ride']['id'];
-          rideStatus = data['ride']['status'];
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ride created successfully')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create ride: ${response.body}')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ride created successfully')));
+        Navigator.pop(context); // Take him back to the dashboard
       }
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
-    } finally {
+    } catch (_) {} finally {
       setState(() => isLoading = false);
     }
   }
 
   Future<void> startRide() async {
-    if (rideId == null) return;
-
-    setState(() => isLoading = true);
-
     try {
-      final response = await http.put(
-        Uri.parse('$backendUrl/api/rides/$rideId/start'),
-      );
-
+      final response = await http.put(Uri.parse('$backendUrl/api/rides/$rideId/start'));
       if (response.statusCode == 200) {
         setState(() => rideStatus = 'ONGOING');
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Ride started')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ride started')));
       }
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error starting ride: $e')));
-    } finally {
-      setState(() => isLoading = false);
-    }
+    } catch (_) {}
   }
 
   Future<void> cancelRide() async {
-    if (rideId == null) return;
-
-    setState(() => isLoading = true);
-
     try {
-      final response = await http.put(
-        Uri.parse('$backendUrl/api/rides/$rideId/cancel'),
-      );
-
+      final response = await http.put(Uri.parse('$backendUrl/api/rides/$rideId/cancel'));
       if (response.statusCode == 200) {
         setState(() {
           rideId = null;
           rideStatus = 'NOT_CREATED';
+          routePoints = [];
           startLocation = null;
           endLocation = null;
-          routePoints = [];
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Ride cancelled')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ride cancelled')));
+        Navigator.pop(context); // Go back to dashboard
       }
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error cancelling ride: $e')));
-    } finally {
-      setState(() => isLoading = false);
-    }
+    } catch (_) {}
   }
 
   Future<void> completeRide() async {
-    if (rideId == null) return;
-
-    setState(() => isLoading = true);
-
     try {
-      final response = await http.put(
-        Uri.parse('$backendUrl/api/rides/$rideId/complete'),
-      );
-
+      final response = await http.put(Uri.parse('$backendUrl/api/rides/$rideId/complete'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        setState(() {
-          rideStatus = 'COMPLETED';
-        });
-        
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (_) => RideSummaryPage(ride: data['ride']),
-          ),
+          MaterialPageRoute(builder: (_) => RideSummaryPage(ride: data['ride'])),
         );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to complete ride')),
-        );
+        // Navigator.pushReplacement replaces DriverPanel with RideSummaryPage.
+        // When RideSummaryPage is popped, it goes back to Dashboard.
+        setState(() {
+          rideId = null;
+          rideStatus = 'NOT_CREATED';
+        });
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error ending ride: $e')),
+    } catch (_) {}
+  }
+
+  Future<void> _decideSeatRequest(int rId, int pId, String decision) async {
+    try {
+      await http.post(Uri.parse('$backendUrl/seat-booking/requests/$rId/$pId/decision'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'driverId': widget.userId, 'decision': decision}),
       );
-    } finally {
-      setState(() => isLoading = false);
-    }
+      fetchData();
+    } catch (_) {}
+  }
+
+  Future<void> deleteNotification(int id) async {
+    try {
+      await http.delete(Uri.parse('$backendUrl/api/notifications/$id'));
+      setState(() => notifications.removeWhere((n) => n['id'] == id));
+    } catch (_) {}
   }
 
   Future<void> selectDepartureTime() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 30)),
-    );
-
+    final picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 30)));
     if (picked != null) {
-      final time = await showTimePicker(
-        context: context,
-        initialTime: TimeOfDay.now(),
-      );
-
+      final time = await showTimePicker(context: context, initialTime: TimeOfDay.now());
       if (time != null) {
         setState(() {
-          selectedDepartureTime = DateTime(
-            picked.year,
-            picked.month,
-            picked.day,
-            time.hour,
-            time.minute,
-          );
+          selectedDepartureTime = DateTime(picked.year, picked.month, picked.day, time.hour, time.minute);
           departureController.text = selectedDepartureTime!.toString();
         });
       }
     }
   }
 
+  void handleMapTap(TapPosition pos, LatLng point) async {
+    if (!canEdit || isLoading) return;
+    setState(() { originSearchResults = []; destinationSearchResults = []; });
+    if (startLocation == null) {
+      setState(() { startLocation = point; endLocation = null; routePoints = []; originController.text = "Loading..."; });
+      final res = await http.get(Uri.parse('https://api.openrouteservice.org/geocode/reverse?api_key=$openRouteServiceApiKey&point.lon=${point.longitude}&point.lat=${point.latitude}&size=1'));
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        setState(() => originController.text = data['features'][0]['properties']['label'] ?? "Selected Location");
+      }
+    } else if (endLocation == null) {
+      setState(() { endLocation = point; destinationController.text = "Loading..."; });
+      final res = await http.get(Uri.parse('https://api.openrouteservice.org/geocode/reverse?api_key=$openRouteServiceApiKey&point.lon=${point.longitude}&point.lat=${point.latitude}&size=1'));
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        setState(() => destinationController.text = data['features'][0]['properties']['label'] ?? "Selected Location");
+        fetchRealRoute();
+      }
+    } else {
+      setState(() { startLocation = point; endLocation = null; routePoints = []; originController.text = "Loading..."; });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final Color brandOrange = const Color(0xFFF98825);
-
+    final brandOrange = const Color(0xFFF98825);
     return Scaffold(
       backgroundColor: Colors.white,
-            appBar: AppBar(
+      appBar: AppBar(
         backgroundColor: brandOrange,
-        title: const Text(
-          'Driver Panel',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        elevation: 0,
+        title: Text('Logged in as ${widget.userName}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.notifications),
-                onPressed: () async {
-                  await fetchNotifications();
-                  if (!mounted) return;
-                  _showNotifications();
-                },
-              ),
-              if (notifications.any((n) => n['isRead'] == false))
-                Positioned(
-                  right: 12,
-                  top: 12,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(6)),
-                    constraints: const BoxConstraints(minWidth: 12, minHeight: 12),
-                  ),
-                ),
-              if (pendingSeatRequests.isNotEmpty)
-                Positioned(
-                  right: 6,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(8)),
-                    child: Text(
-                      '${pendingSeatRequests.length}',
-                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          IconButton(
-            icon: const Icon(Icons.list),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const MyRidesPageDriver(),
-                ),
-              );
-            },
-            tooltip: 'My rides',
-          ),
-          IconButton(
-            icon: const Icon(Icons.verified_user),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => VerificationRequestPage(
-                  userId: widget.userId,
-                  userName: widget.userName,
-                ),
-              ),
-            ),
-            tooltip: 'Verify Profile',
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () {
-              Session.userId = null;
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (context) => const LoginScreen()),
-                (route) => false,
-              );
-            },
-          ),
+          IconButton(icon: const Icon(Icons.notifications), onPressed: _showNotifications),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: fetchData),
         ],
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: FlutterMap(
-                mapController: mapController,
-                options: MapOptions(
-                  initialCenter: const LatLng(23.8103, 90.4125), // Dhaka
-                  initialZoom: 12,
-                  onTap: canEdit
-                      ? (tapPosition, point) => handleMapTap(tapPosition, point)
-                      : null,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (userData != null && ((userData!['totalWarnings'] ?? 0) > 0 || userData!['isBanned'] == true))
+                _buildStatusAlert(),
+              const BroadcastBanner(),
+              const SizedBox(height: 16),
+              
+              // --- Map Section ---
+              const Text('Ride Map', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Container(
+                height: 300,
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade300)),
+                clipBehavior: Clip.antiAlias,
+                child: FlutterMap(
+                  mapController: mapController,
+                  options: MapOptions(
+                    initialCenter: const LatLng(23.8103, 90.4125),
+                    initialZoom: 12,
+                    onTap: handleMapTap,
+                  ),
+                  children: [
+                    TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+                    if (startLocation != null) MarkerLayer(markers: [Marker(point: startLocation!, child: const Icon(Icons.location_on, color: Colors.green, size: 30))]),
+                    if (endLocation != null) MarkerLayer(markers: [Marker(point: endLocation!, child: const Icon(Icons.location_on, color: Colors.red, size: 30))]),
+                    if (routePoints.isNotEmpty) PolylineLayer(polylines: [Polyline(points: routePoints, color: Colors.blue, strokeWidth: 3.0)]),
+                  ],
                 ),
-                children: [
-                  TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.mashfi.cholo_app.dev',
-                  ),
-                  if (startLocation != null)
-                    MarkerLayer(
-                      markers: [
-                        Marker(
-                          point: startLocation!,
-                          child: const Icon(
-                            Icons.location_on,
-                            color: Colors.green,
-                            size: 40,
-                          ),
-                        ),
-                      ],
-                    ),
-                  if (endLocation != null)
-                    MarkerLayer(
-                      markers: [
-                        Marker(
-                          point: endLocation!,
-                          child: const Icon(
-                            Icons.location_on,
-                            color: Colors.red,
-                            size: 40,
-                          ),
-                        ),
-                      ],
-                    ),
-                  if (routePoints.isNotEmpty)
-                    PolylineLayer(
-                      polylines: [
-                        Polyline(
-                          points: routePoints,
-                          color: Colors.blue,
-                          strokeWidth: 4.0,
-                        ),
-                      ],
-                    ),
-                ],
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16.0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => VerificationRequestPage(
-                                  userId: widget.userId,
-                                  userName: widget.userName,
-                                ),
-                              ),
-                            ),
-                            icon: const Icon(Icons.verified_user),
-                            label: const Text('Verify Profile'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: brandOrange,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (canEdit) ...[
-                    TextField(
-                      controller: originController,
-                      decoration: const InputDecoration(
-                        labelText: 'Origin',
-                        border: OutlineInputBorder(),
-                        hintText: 'Type to search or tap on map',
-                      ),
-                      onChanged: (value) => searchLocations(value, true),
-                    ),
-                    if (originSearchResults.isNotEmpty &&
-                        originController.text.isNotEmpty &&
-                        !isSelectingOrigin)
-                      Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: originSearchResults.length,
-                          itemBuilder: (context, index) {
-                            final result = originSearchResults[index];
-                            return ListTile(
-                              title: Text(result['label']),
-                              onTap: () async {
-                                setState(() {
-                                  isSelectingOrigin = true;
-                                  startLocation = LatLng(
-                                    result['lat'],
-                                    result['lon'],
-                                  );
-                                  originController.text = result['label'];
-                                  originSearchResults = [];
-                                  endLocation = null;
-                                  destinationController.clear();
-                                  destinationSearchResults = [];
-                                });
-                                await Future.delayed(
-                                  const Duration(milliseconds: 300),
-                                );
-                                setState(() {
-                                  isSelectingOrigin = false;
-                                });
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: destinationController,
-                      decoration: const InputDecoration(
-                        labelText: 'Destination',
-                        border: OutlineInputBorder(),
-                        hintText: 'Type to search or tap on map',
-                      ),
-                      onChanged: (value) => searchLocations(value, false),
-                    ),
-                    if (destinationSearchResults.isNotEmpty &&
-                        destinationController.text.isNotEmpty &&
-                        !isSelectingDestination)
-                      Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: destinationSearchResults.length,
-                          itemBuilder: (context, index) {
-                            final result = destinationSearchResults[index];
-                            return ListTile(
-                              title: Text(result['label']),
-                              onTap: () async {
-                                setState(() {
-                                  isSelectingDestination = true;
-                                  endLocation = LatLng(
-                                    result['lat'],
-                                    result['lon'],
-                                  );
-                                  destinationController.text = result['label'];
-                                  destinationSearchResults = [];
-                                });
-                                await Future.delayed(
-                                  const Duration(milliseconds: 300),
-                                );
-                                setState(() {
-                                  isSelectingDestination = false;
-                                });
-                                if (startLocation != null &&
-                                    endLocation != null) {
-                                  fetchRealRoute();
-                                }
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: departureController,
-                      decoration: const InputDecoration(
-                        labelText: 'Departure Time',
-                        border: OutlineInputBorder(),
-                        suffixIcon: Icon(Icons.calendar_today),
-                      ),
-                      readOnly: true,
-                      onTap: selectDepartureTime,
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: seatsController,
-                      decoration: const InputDecoration(
-                        labelText: 'Seats',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.number,
-                      onChanged: (_) => _fetchFareEstimatesFromBackend(),
-                    ),
-                    const SizedBox(height: 16),
-                    if (routeDistanceKm != null && routeDurationMin != null)
-                      Text(
-                        'Distance: ${routeDistanceKm!.toStringAsFixed(1)} km, Duration: ${routeDurationMin!.toStringAsFixed(0)} min',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    if (routeDistanceKm != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'Est. minimum total: $minEstimatedFare Taka',
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                      Text(
-                        'Est. maximum total: $maxEstimatedFare Taka',
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                      if (isFareEstimateLoading)
-                        const SizedBox(
-                          height: 14,
-                          width: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                    ],
-                    const SizedBox(height: 16),
-                    if (canShowCreate)
-                      ElevatedButton(
-                        onPressed: isLoading ? null : createRide,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: brandOrange,
-                          minimumSize: const Size(double.infinity, 50),
-                        ),
-                        child: isLoading
-                            ? const CircularProgressIndicator()
-                            : const Text('Create Ride'),
-                      ),
-                  ],
-                  if (canShowPlannedActions) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: isLoading ? null : startRide,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                            ),
-                            child: const Text('Start Ride'),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: isLoading ? null : cancelRide,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                            ),
-                            child: const Text('Cancel Ride'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                  ],
+              const SizedBox(height: 16),
 
-                  if (canShowOngoingActions) ...[
-                    ElevatedButton(
-                      onPressed: isLoading ? null : completeRide,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        minimumSize: const Size(double.infinity, 50),
-                      ),
-                      child: const Text('End Ride', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-
-                  if (rideId != null) ...[
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => RideDetailsPage(
-                              ride: {
-                                "id": rideId,
-                                "origin": originController.text,
-                                "destination": destinationController.text,
-                                "routeDistanceKm": routeDistanceKm,
-                                "routeDurationMin": routeDurationMin,
-                                "departureTime": departureController.text,
-                                "seats": seatsController.text,
-                                "status": rideStatus,
-                                "driverId": widget.userId,
-                              },
-                            ),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                      ),
-                      child: const Text("View Ride Details"),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                ],
-              ),
-            ),
-          ],
+              // --- Actions Section ---
+              if (rideStatus == "NOT_CREATED") _buildCreationForm(),
+              if (rideStatus == "PLANNED") _buildPlannedActions(),
+              if (rideStatus == "ONGOING") _buildOngoingActions(),
+              
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Future<void> handleMapTap(TapPosition tapPosition, LatLng point) async {
-    if (!canEdit || isLoading) return;
+  Widget _buildCreationForm() {
+    return Column(
+      children: [
+        TextField(controller: originController, decoration: const InputDecoration(labelText: 'Origin', border: OutlineInputBorder()), onChanged: (v) => searchLocations(v, true)),
+        if (originSearchResults.isNotEmpty) _buildSearchResults(originSearchResults, true),
+        const SizedBox(height: 12),
+        TextField(controller: destinationController, decoration: const InputDecoration(labelText: 'Destination', border: OutlineInputBorder()), onChanged: (v) => searchLocations(v, false)),
+        if (destinationSearchResults.isNotEmpty) _buildSearchResults(destinationSearchResults, false),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: TextField(controller: departureController, decoration: const InputDecoration(labelText: 'Departure', border: OutlineInputBorder()), readOnly: true, onTap: selectDepartureTime)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: seatsController,
+                decoration: const InputDecoration(
+                    labelText: 'Seats', border: OutlineInputBorder()),
+                keyboardType: TextInputType.number,
+                onChanged: (_) => _fetchFareEstimatesFromBackend(),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (isFareEstimateLoading)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8.0),
+            child: SizedBox(
+                height: 14,
+                width: 14,
+                child: CircularProgressIndicator(strokeWidth: 2)),
+          ),
+        if (minEstimatedFare > 0)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: Column(
+              children: [
+                Text(
+                  'Est. minimum total: $minEstimatedFare Taka',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  'Est. maximum total: $maxEstimatedFare Taka',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        ElevatedButton(
+          onPressed: isLoading ? null : createRide,
+          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF98825), minimumSize: const Size(double.infinity, 50)),
+          child: isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('Create Ride', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        ),
+      ],
+    );
+  }
 
-    setState(() {
-      originSearchResults = [];
-      destinationSearchResults = [];
-    });
+  Widget _buildPlannedActions() {
+    return Column(
+      children: [
+        Text('Active Ride: ${originController.text} to ${destinationController.text}', style: const TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: ElevatedButton(onPressed: startRide, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text('Start Ride', style: TextStyle(color: Colors.white)))),
+            const SizedBox(width: 12),
+            Expanded(child: ElevatedButton(onPressed: cancelRide, style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: const Text('Cancel Ride', style: TextStyle(color: Colors.white)))),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ElevatedButton(
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RideDetailsPage(ride: {'id': rideId, 'origin': originController.text, 'destination': destinationController.text, 'status': rideStatus, 'driverId': widget.userId}))),
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, minimumSize: const Size(double.infinity, 50)),
+          child: const Text('View Ride & Passenger Details', style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    );
+  }
 
-    if (startLocation == null) {
-      setState(() {
-        startLocation = point;
-        endLocation = null;
-        routePoints = [];
-        routeDistanceKm = null;
-        routeDurationMin = null;
-        minEstimatedFare = 0;
-        maxEstimatedFare = 0;
-        originController.text = "Loading place...";
-        destinationController.clear();
-      });
+  Widget _buildOngoingActions() {
+    return Column(
+      children: [
+        const Text('Ride in Progress', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+        const SizedBox(height: 12),
+        ElevatedButton(onPressed: completeRide, style: ElevatedButton.styleFrom(backgroundColor: Colors.red, minimumSize: const Size(double.infinity, 50)), child: const Text('End Ride', style: TextStyle(color: Colors.white))),
+        const SizedBox(height: 12),
+        ElevatedButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RideDetailsPage(ride: {'id': rideId, 'origin': originController.text, 'destination': destinationController.text, 'status': rideStatus, 'driverId': widget.userId}))), style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, minimumSize: const Size(double.infinity, 50)), child: const Text('View Live Ride Details', style: TextStyle(color: Colors.white))),
+      ],
+    );
+  }
 
-      final placeName = await reverseGeocode(point);
+  Widget _buildActionButton(String title, IconData icon, VoidCallback onPressed) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF98825), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+      child: Column(children: [Icon(icon, size: 24), const SizedBox(height: 4), Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))]),
+    );
+  }
 
-      setState(() {
-        originController.text = placeName;
-      });
-    } else if (endLocation == null) {
-      setState(() {
-        endLocation = point;
-        destinationController.text = "Loading place...";
-      });
+  Widget _buildSearchResults(List<Map<String, dynamic>> results, bool isOrigin) {
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 150),
+      margin: const EdgeInsets.only(top: 4),
+      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+      child: ListView.builder(shrinkWrap: true, itemCount: results.length, itemBuilder: (context, index) {
+        final r = results[index];
+        return ListTile(title: Text(r['label'], style: const TextStyle(fontSize: 12)), onTap: () {
+          setState(() {
+            if (isOrigin) { startLocation = LatLng(r['lat'], r['lon']); originController.text = r['label']; originSearchResults = []; }
+            else { endLocation = LatLng(r['lat'], r['lon']); destinationController.text = r['label']; destinationSearchResults = []; }
+          });
+          if (startLocation != null && endLocation != null) fetchRealRoute();
+        });
+      }),
+    );
+  }
 
-      final placeName = await reverseGeocode(point);
+  void _showNotifications() {
+    showDialog(context: context, builder: (context) => AlertDialog(title: const Text('Notifications'), content: SizedBox(width: double.maxFinite, child: ListView(shrinkWrap: true, children: [
+      if (pendingSeatRequests.isNotEmpty) ...[const Text('Requests', style: TextStyle(fontWeight: FontWeight.bold)), ...pendingSeatRequests.map((r) => ListTile(title: Text(r['passengerName']), subtitle: Text('${r['origin']} to ${r['destination']}'), trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(icon: const Icon(Icons.check, color: Colors.green), onPressed: () => _decideSeatRequest(r['rideId'], r['passengerId'], 'ACCEPT')),
+        IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: () => _decideSeatRequest(r['rideId'], r['passengerId'], 'REJECT')),
+      ])))],
+      ...notifications.map((n) => ListTile(title: Text(n['title']), subtitle: Text(n['message']), trailing: IconButton(icon: const Icon(Icons.close), onPressed: () => deleteNotification(n['id'])))),
+    ])), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))]));
+  }
 
-      setState(() {
-        destinationController.text = placeName;
-      });
-
-      if (startLocation != null && endLocation != null) {
-        await fetchRealRoute();
-      }
-    } else {
-      setState(() {
-        startLocation = point;
-        endLocation = null;
-        routePoints = [];
-        routeDistanceKm = null;
-        routeDurationMin = null;
-        minEstimatedFare = 0;
-        maxEstimatedFare = 0;
-        originController.text = "Loading place...";
-        destinationController.clear();
-      });
-
-      final placeName = await reverseGeocode(point);
-
-      setState(() {
-        originController.text = placeName;
-      });
-    }
+  Widget _buildStatusAlert() {
+    final bool isBanned = userData?['isBanned'] ?? false;
+    final int warnings = userData?['totalWarnings'] ?? 0;
+    return Container(padding: const EdgeInsets.all(12), margin: const EdgeInsets.only(bottom: 12), decoration: BoxDecoration(color: isBanned ? Colors.red.shade50 : Colors.orange.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: isBanned ? Colors.red : Colors.orange)), child: Row(children: [Icon(isBanned ? Icons.block : Icons.warning, color: isBanned ? Colors.red : Colors.orange), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(isBanned ? 'BANNED' : 'WARNING', style: TextStyle(fontWeight: FontWeight.bold, color: isBanned ? Colors.red : Colors.orange.shade900)), Text(isBanned ? 'Account suspended.' : 'You have $warnings warnings.', style: const TextStyle(fontSize: 11))]))]));
   }
 }

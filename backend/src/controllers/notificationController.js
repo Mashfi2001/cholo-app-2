@@ -31,3 +31,17 @@ exports.markAsRead = async (req, res) => {
         return res.status(500).json({ error: "Failed to update notification" });
     }
 };
+exports.deleteNotification = async (req, res) => {
+    const notificationId = Number(req.params.id);
+
+    try {
+        await prisma.notification.delete({
+            where: { id: notificationId },
+        });
+
+        return res.json({ message: "Notification deleted successfully" });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Failed to delete notification" });
+    }
+};

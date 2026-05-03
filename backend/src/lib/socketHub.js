@@ -10,4 +10,12 @@ module.exports = {
       ioInstance.emit("fareUpdate", payload);
     }
   },
+  emitRideMessage(message) {
+    if (ioInstance) {
+      const u1 = Math.min(message.senderId, message.receiverId);
+      const u2 = Math.max(message.senderId, message.receiverId);
+      const room = `chat_${message.rideId}_${u1}_${u2}`;
+      ioInstance.to(room).emit("new_message", message);
+    }
+  },
 };

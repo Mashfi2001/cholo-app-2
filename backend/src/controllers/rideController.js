@@ -1,4 +1,5 @@
 const prisma = require("../lib/prisma");
+const chatController = require("./chatController");
 
 exports.getAllRides = async (req, res) => {
   try {
@@ -177,6 +178,9 @@ exports.cancelRide = async (req, res) => {
       message: "Ride cancelled successfully",
       ride: cancelledRide,
     });
+
+    // Cleanup chat history
+    await chatController.deleteRideMessages(id);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -245,6 +249,25 @@ exports.completeRide = async (req, res) => {
       message: "Ride completed successfully",
       ride: completedRide,
     });
+
+    // Cleanup chat history
+    await chatController.deleteRideMessages(id);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.getActiveRideForDriver = async (req, res) => {
+  try {
+    const { driverId } = req.params;
+    const ride = await prisma.ride.findFirst({
+      where: {
+        driverId: Number(driverId),
+        status: { in: ["PLANNED", "ONGOING"] },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ ride });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

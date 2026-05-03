@@ -9,6 +9,7 @@ router.put("/:id/route", rideController.updateRideRoute);
 router.put("/:id/start", rideController.startRide);
 router.put("/:id/cancel", rideController.cancelRide);
 router.put("/:id/complete", rideController.completeRide);
+router.get("/driver/:driverId/active", rideController.getActiveRideForDriver);
 router.get("/driver/:driverId", async (req, res) => {
   try {
     const driverId = Number(req.params.driverId);

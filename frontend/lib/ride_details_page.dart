@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'backend_config.dart';
 import 'session.dart';
 import 'ride_summary_page.dart';
+import 'ride_chat_page.dart';
 
 import 'package:intl/intl.dart';
 
@@ -469,7 +470,7 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
-        title: const Text("Ride Dashboard"),
+        title: const Text("Ride Details"),
         backgroundColor: const Color(0xFFF98825),
         foregroundColor: Colors.white,
         elevation: 0,
@@ -496,18 +497,6 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (isDriver && isOngoing) ...[
-              ElevatedButton(
-                onPressed: isLoading ? null : completeRide,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-                child: const Text('End Ride', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(height: 12),
-            ],
             _buildRouteInfoCard(),
             const SizedBox(height: 12),
             _buildEarningsCard(),
@@ -735,12 +724,33 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
               ),
             ),
             
-            // Complaint Button - Always enabled for both active AND completed passengers
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
+            // Chat and Complaint Buttons
+            Row(
+              children: [
+                if (isActive)
+                  IconButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => RideChatPage(
+                            rideId: rideId!,
+                            rideTitle: '${widget.ride['origin']} to ${widget.ride['destination']}',
+                            otherUserId: passenger['id'],
+                            otherUserName: passenger['name'],
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.chat_bubble_outline, size: 20, color: Color(0xFFF98825)),
+                    tooltip: "Chat with ${passenger['name']}",
+                  ),
+                IconButton(
+                  onPressed: () => _showPassengerDetailsDialog(passenger),
+                  icon: const Icon(Icons.info_outline, size: 20, color: Colors.blue),
+                  tooltip: "Details",
+                ),
+              ],
             ),
           ],
         ),

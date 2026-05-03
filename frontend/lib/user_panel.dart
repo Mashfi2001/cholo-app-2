@@ -6,7 +6,6 @@ import 'login_screen.dart';
 import 'verification_request_page.dart';
 import 'book_ride_page.dart';
 import 'broadcast_banner.dart';
-import 'SeatSelectionPage.dart';
 import 'session.dart';
 import 'backend_config.dart';
 import 'passenger_rides_list.dart';
@@ -66,6 +65,22 @@ class _UserPanelState extends State<UserPanel> {
     }
   }
 
+  Future<void> deleteNotification(int id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$backendUrl/api/notifications/$id'),
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          notifications.removeWhere((n) => n['id'] == id);
+        });
+      }
+    } catch (e) {
+      print('Error deleting notification: $e');
+    }
+  }
+
   void _showNotifications() {
     showDialog(
       context: context,
@@ -90,6 +105,14 @@ class _UserPanelState extends State<UserPanel> {
                       title: Text(n['title'], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                       subtitle: Text(n['message'], style: const TextStyle(fontSize: 12)),
                       contentPadding: EdgeInsets.zero,
+                      trailing: IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () {
+                          deleteNotification(n['id']);
+                          Navigator.pop(context);
+                          _showNotifications();
+                        },
+                      ),
                     );
                   },
                 ),
@@ -110,9 +133,9 @@ class _UserPanelState extends State<UserPanel> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: brandOrange,
-        title: const Text(
-          'User Dashboard',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: Text(
+          'Logged in as ${widget.userName}',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         elevation: 0,
@@ -196,8 +219,7 @@ class _UserPanelState extends State<UserPanel> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 32),
-                    _buildFeatureSection(brandOrange, darkText),
-                    const SizedBox(height: 32),
+
                     const Text(
                       'Quick Actions',
                       style: TextStyle(
@@ -238,25 +260,7 @@ class _UserPanelState extends State<UserPanel> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildActionButton(
-                            'Book Seat',
-                            Icons.event_seat,
-                            () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      const SeatSelectionPage(rideId: 1),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
+
                     const SizedBox(height: 16),
                     Row(
                       children: [
@@ -400,91 +404,21 @@ class _UserPanelState extends State<UserPanel> {
           n['message'].toString(),
           style: const TextStyle(fontSize: 12),
         ),
-        trailing: Text(
-          n['createdAt'].toString().length > 10
-              ? n['createdAt'].toString().substring(5, 10)
-              : '',
-          style: const TextStyle(fontSize: 10, color: Colors.grey),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              n['createdAt'].toString().length > 10
+                  ? n['createdAt'].toString().substring(5, 10)
+                  : '',
+              style: const TextStyle(fontSize: 10, color: Colors.grey),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 16),
+              onPressed: () => deleteNotification(n['id']),
+            ),
+          ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildFeatureSection(Color brandOrange, Color darkText) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: brandOrange.withOpacity(0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Available Features',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: darkText,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildFeatureItem(
-            'Book a Ride',
-            'Find and book rides to your destination',
-          ),
-          _buildFeatureItem(
-            'Ride History',
-            'View your past rides and bookings',
-          ),
-          _buildFeatureItem(
-            'Payment Methods',
-            'Manage your payment options',
-          ),
-          _buildFeatureItem(
-            'Profile Settings',
-            'Update your personal information',
-          ),
-          _buildFeatureItem(
-            'Support',
-            'Get help and contact support',
-          ),
-          _buildFeatureItem(
-            'Seat Booking',
-            'Pick a seat on rides you joined',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFeatureItem(String title, String description) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          const Icon(Icons.check_circle, color: Color(0xFFF98825), size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                  ),
-                ),
-                Text(
-                  description,
-                  style: const TextStyle(color: Colors.grey, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

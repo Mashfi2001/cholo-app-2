@@ -10,6 +10,16 @@ socketHub.attach(io);
 
 io.on("connection", (socket) => {
   console.log("A user connected");
+  
+  socket.on("join_chat", (payload) => {
+    const { rideId, userId, otherUserId } = payload;
+    const u1 = Math.min(userId, otherUserId);
+    const u2 = Math.max(userId, otherUserId);
+    const room = `chat_${rideId}_${u1}_${u2}`;
+    socket.join(room);
+    console.log(`User joined private chat room: ${room}`);
+  });
+
   socket.on("disconnect", () => {
     console.log("A user disconnected");
   });

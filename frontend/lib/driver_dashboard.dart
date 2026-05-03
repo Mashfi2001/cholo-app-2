@@ -1,7 +1,15 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'driver_panel.dart';
+import 'my_rides_page_driver.dart';
+import 'verification_request_page.dart';
+import 'login_screen.dart';
+import 'session.dart';
+import 'complaints_page.dart';
+import 'backend_config.dart';
 
-class DriverDashboard extends StatelessWidget {
+class DriverDashboard extends StatefulWidget {
   final int userId;
   final String userName;
 
@@ -12,127 +20,243 @@ class DriverDashboard extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<DriverDashboard> createState() => _DriverDashboardState();
+}
+
+class _DriverDashboardState extends State<DriverDashboard> {
+  Map<String, dynamic>? activeRide;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchActiveRide();
+  }
+
+  Future<void> _fetchActiveRide() async {
+    setState(() => isLoading = true);
+    try {
+      final response = await http.get(
+        Uri.parse('$backendUrl/api/rides/driver/${widget.userId}/active'),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          activeRide = data['ride'];
+        });
+      }
+    } catch (e) {
+      print('Error fetching active ride: $e');
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final Color brandOrange = const Color(0xFFF98825);
     final Color darkText = const Color(0xFF2C323A);
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Driver Dashboard'),
+        title: Text(
+          'Logged in as ${widget.userName}',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         backgroundColor: brandOrange,
         foregroundColor: Colors.white,
         elevation: 0,
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _fetchActiveRide,
+          ),
+        ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 40),
-            
-            // Welcome Message
-            Text(
-              'Welcome, $userName!',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: darkText,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'What would you like to do today?',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 60),
-
-            // Create Ride Button
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => DriverPanel(
-                      userId: userId,
-                      userName: userName,
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 24),
+                  Image.asset('assets/cholo_logo.png', height: 80),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Driver Dashboard',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: darkText,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
+                  const Text(
+                    'Quick Actions',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2C323A),
                     ),
                   ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: brandOrange,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                elevation: 2,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.directions_car, size: 28),
-                  SizedBox(width: 12),
-                  Text(
-                    'Create Ride',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ),
-            
-            const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
-            // File a Complaint Button (Placeholder)
-            OutlinedButton(
-              onPressed: () {
-                // Placeholder: Show dialog or navigate to complaint page later
-                showDialog(
-                  context: context,
-                  builder: (BuildContext context) {
-                    return AlertDialog(
-                      title: const Text('File a Complaint'),
-                      content: const Text(
-                        'This feature is coming soon. You will be able to file complaints about passengers, rides, or system issues.',
+                  // Row 1: Create Ride / Current Ride & File Complaint
+                  Row(
+                    children: [
+                      Expanded(
+                        child: activeRide == null
+                            ? _buildActionButton(
+                                'Create Ride',
+                                Icons.add_circle_outline,
+                                () {
+                                  Navigator.of(context)
+                                      .push(
+                                    MaterialPageRoute(
+                                      builder: (context) => DriverPanel(
+                                        userId: widget.userId,
+                                        userName: widget.userName,
+                                      ),
+                                    ),
+                                  )
+                                      .then((_) => _fetchActiveRide());
+                                },
+                              )
+                            : _buildActionButton(
+                                'Current Ride',
+                                Icons.directions_car,
+                                () {
+                                  Navigator.of(context)
+                                      .push(
+                                    MaterialPageRoute(
+                                      builder: (context) => DriverPanel(
+                                        userId: widget.userId,
+                                        userName: widget.userName,
+                                      ),
+                                    ),
+                                  )
+                                      .then((_) => _fetchActiveRide());
+                                },
+                                color: Colors.green,
+                              ),
                       ),
-                      actions: [
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(context).pop();
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildActionButton(
+                          'File Complaint',
+                          Icons.report_problem_outlined,
+                          () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const ComplaintsPage()),
+                            );
                           },
-                          child: const Text('OK'),
                         ),
-                      ],
-                    );
-                  },
-                );
-              },
-              style: OutlinedButton.styleFrom(
-                foregroundColor: brandOrange,
-                side: BorderSide(color: brandOrange, width: 2),
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.report_problem, size: 28),
-                  SizedBox(width: 12),
-                  Text(
-                    'File a Complaint',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Row 2: My Rides & Verify Profile
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildActionButton(
+                          'My Rides',
+                          Icons.history,
+                          () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                  builder: (_) => const MyRidesPageDriver()),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildActionButton(
+                          'Verify Profile',
+                          Icons.verified_user,
+                          () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => VerificationRequestPage(
+                                  userId: widget.userId,
+                                  userName: widget.userName,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Row 3: Support & Logout
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildActionButton(
+                          'Support',
+                          Icons.help_outline,
+                          () {},
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildActionButton(
+                          'Logout',
+                          Icons.logout,
+                          () {
+                            Session.userId = null;
+                            Navigator.of(context).pushAndRemoveUntil(
+                              MaterialPageRoute(
+                                  builder: (context) => const LoginScreen()),
+                              (route) => false,
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-          ],
-        ),
+    );
+  }
+
+  Widget _buildActionButton(
+    String title,
+    IconData icon,
+    VoidCallback onPressed, {
+    Color? color,
+  }) {
+    final Color brandOrange = const Color(0xFFF98825);
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color ?? brandOrange,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 0,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 24),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ],
       ),
     );
   }

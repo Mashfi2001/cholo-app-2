@@ -32,6 +32,8 @@ model User {
   systemMessages      SystemMessage[]
   verifications       VerificationRequest[]
   warnings            Warning[]
+  sentMessages        RideMessage[]         @relation("SentMessages")
+  receivedMessages    RideMessage[]         @relation("ReceivedMessages")
 }
 
 model Ride {
@@ -58,6 +60,20 @@ model Ride {
   complaints       Complaint[]
   driver           User             @relation(fields: [driverId], references: [id])
   seatBookings     SeatBooking[]
+  messages         RideMessage[]
+}
+
+model RideMessage {
+  id         Int      @id @default(autoincrement())
+  rideId     Int
+  senderId   Int
+  receiverId Int
+  content    String
+  createdAt  DateTime @default(now())
+  
+  ride     Ride @relation(fields: [rideId], references: [id])
+  sender   User @relation("SentMessages", fields: [senderId], references: [id])
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id])
 }
 
 model BookingRequest {

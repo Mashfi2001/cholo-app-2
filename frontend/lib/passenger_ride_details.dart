@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'session.dart';
 import 'backend_config.dart';
+import 'ride_chat_page.dart';
 
 class PassengerRideDetails extends StatefulWidget {
   final dynamic ride;
@@ -878,14 +879,45 @@ class _PassengerRideDetailsState extends State<PassengerRideDetails> {
                           _infoRow(Icons.person, 'Name', driver?['name'] ?? 'N/A'),
                           _infoRow(Icons.email, 'Email', driver?['email'] ?? 'N/A'),
                           const SizedBox(height: 8),
-                          ElevatedButton.icon(
-                            onPressed: _reportDriver,
-                            icon: const Icon(Icons.report_problem_outlined, size: 16),
-                            label: const Text('Report Driver'),
-                            style: ElevatedButton.styleFrom(
-                              foregroundColor: Colors.red,
-                              side: const BorderSide(color: Colors.red),
-                            ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => RideChatPage(
+                                          rideId: widget.ride['id'],
+                                          rideTitle: '${widget.ride['origin']} to ${widget.ride['destination']}',
+                                          otherUserId: driver?['id'],
+                                          otherUserName: driver?['name'] ?? 'Driver',
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                                  label: const Text('Ride Chat'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: brandOrange,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: _reportDriver,
+                                  icon: const Icon(Icons.report_problem_outlined, size: 16),
+                                  label: const Text('Report Driver'),
+                                  style: ElevatedButton.styleFrom(
+                                    foregroundColor: Colors.red,
+                                    side: const BorderSide(color: Colors.red),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
