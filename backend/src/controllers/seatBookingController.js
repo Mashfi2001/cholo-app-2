@@ -55,6 +55,17 @@ exports.getSeatsByRide = async (req, res) => {
     try {
       unitPassengerFare = passengerFareForRide(ride, passengerCoords);
       billableDistanceKm = billableDistanceKmForRide(ride, passengerCoords);
+
+      // If user is logged in and coordinates aren't provided, 
+      // try to find if they already have a booking for this ride and use that fare
+      if (userId && (!passengerCoords.pickupLat || !passengerCoords.dropLat)) {
+        const existingBooking = await prisma.seatBooking.findFirst({
+          where: { rideId, userId }
+        });
+        if (existingBooking) {
+          unitPassengerFare = existingBooking.fare;
+        }
+      }
     } catch (e) {
       if (e.code !== "NO_DISTANCE_FOR_FARE") throw e;
     }
