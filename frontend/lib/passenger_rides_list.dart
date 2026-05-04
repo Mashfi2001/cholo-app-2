@@ -125,7 +125,7 @@ class _PassengerRidesListState extends State<PassengerRidesList> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: ride['status'] == 'ACTIVE' 
+                      color: (ride['status'] == 'PLANNED' || ride['status'] == 'ONGOING')
                         ? Colors.green.shade100 
                         : Colors.grey.shade200,
                       borderRadius: BorderRadius.circular(12),
@@ -135,7 +135,7 @@ class _PassengerRidesListState extends State<PassengerRidesList> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: ride['status'] == 'ACTIVE' 
+                        color: (ride['status'] == 'PLANNED' || ride['status'] == 'ONGOING')
                           ? Colors.green.shade800 
                           : Colors.grey.shade700,
                       ),

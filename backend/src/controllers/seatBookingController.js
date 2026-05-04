@@ -561,10 +561,6 @@ exports.getPassengerRideHistory = async (req, res) => {
     const bookings = await prisma.seatBooking.findMany({
       where: {
         userId,
-        OR: [
-          { paidAt: { not: null } },
-          { ride: { status: { in: ["COMPLETED", "CANCELLED"] } } },
-        ],
       },
       include: {
         ride: {
