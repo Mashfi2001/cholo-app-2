@@ -422,6 +422,7 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
           ),
         ));
         await fetchSeats();
+        _showRatingDialog();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(body["error"]?.toString() ?? "Payment failed")));
@@ -435,6 +436,85 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
         setState(() => isProcessingPayment = false);
       }
     }
+  }
+
+  Future<void> _showRatingDialog() async {
+    int selectedStars = 5;
+    final commentController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateDialog) => AlertDialog(
+          title: const Text("Rate Your Driver"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("How was your ride?"),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) {
+                  return IconButton(
+                    icon: Icon(
+                      index < selectedStars ? Icons.star : Icons.star_border,
+                      color: Colors.amber,
+                      size: 32,
+                    ),
+                    onPressed: () {
+                      setStateDialog(() => selectedStars = index + 1);
+                    },
+                  );
+                }),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: commentController,
+                decoration: const InputDecoration(
+                  hintText: "Add a comment (optional)",
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Skip for now"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final driverId = rideDetails?['driver']?['id'];
+                if (driverId == null) {
+                  Navigator.pop(context);
+                  return;
+                }
+
+                try {
+                  await http.post(
+                    Uri.parse("$backendUrl/api/ratings"),
+                    headers: {"Content-Type": "application/json"},
+                    body: jsonEncode({
+                      "rideId": widget.rideId,
+                      "userId": Session.userId,
+                      "driverId": driverId,
+                      "stars": selectedStars,
+                      "comment": commentController.text.trim(),
+                    }),
+                  );
+                } catch (e) {
+                  debugPrint("Error submitting rating: $e");
+                }
+                Navigator.pop(context);
+              },
+              child: const Text("Submit"),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /* ─── UI BUILDERS ─── */

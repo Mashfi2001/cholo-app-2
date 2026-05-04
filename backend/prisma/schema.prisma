@@ -34,6 +34,8 @@ model User {
   warnings            Warning[]
   sentMessages        RideMessage[]         @relation("SentMessages")
   receivedMessages    RideMessage[]         @relation("ReceivedMessages")
+  givenRatings        Rating[]              @relation("GivenRatings")
+  receivedRatings     Rating[]              @relation("ReceivedRatings")
 }
 
 model Ride {
@@ -61,6 +63,7 @@ model Ride {
   driver           User             @relation(fields: [driverId], references: [id])
   seatBookings     SeatBooking[]
   messages         RideMessage[]
+  ratings          Rating[]
 }
 
 model RideMessage {
@@ -248,4 +251,19 @@ enum BroadcastType {
   ANNOUNCEMENT
   ALERT
   MAINTENANCE
+}
+model Rating {
+  id        Int      @id @default(autoincrement())
+  rideId    Int
+  userId    Int
+  driverId  Int
+  stars     Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  ride   Ride @relation(fields: [rideId], references: [id])
+  user   User @relation("GivenRatings", fields: [userId], references: [id])
+  driver User @relation("ReceivedRatings", fields: [driverId], references: [id])
+
+  @@unique([rideId, userId])
 }
