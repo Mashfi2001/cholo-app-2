@@ -245,6 +245,14 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
                 color: const Color(0xFFF6921E),
                 value: "nagad",
               ),
+              _paymentOption(
+                icon: Icons.credit_card,
+                label: "Stripe",
+                sublabel: "External Payment API",
+                color: const Color(0xFF635BFF),
+                value: "stripe",
+              ),
+
               const SizedBox(height: 16),
             ],
           ),
@@ -292,10 +300,20 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
     final pinController = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
+    String title;
+    if (paymentMethod == "bkash") {
+      title = "bKash Payment";
+    } else if (paymentMethod == "nagad") {
+      title = "Nagad Payment";
+    } else {
+      title = "External API (Stripe)";
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(paymentMethod == "bkash" ? "bKash Payment" : "Nagad Payment"),
+        title: Text(title),
+
         content: Form(
           key: formKey,
           child: Column(

@@ -1,4 +1,6 @@
 const prisma = require("../lib/prisma");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
 const {
   passengerFareForRide,
   billableDistanceKmForRide,
@@ -266,7 +268,7 @@ exports.completePayment = async (req, res) => {
   const userId = Number(req.body.userId);
   const paymentMethod = String(req.body.paymentMethod || "").toLowerCase();
   const paymentPhone = String(req.body.paymentPhone || "").trim();
-  const allowedMethods = ["cash", "bkash", "nagad"];
+  const allowedMethods = ["cash", "bkash", "nagad", "stripe"];
 
   if (!Number.isInteger(rideId) || !Number.isInteger(userId)) {
     return res.status(400).json({ error: "rideId and userId are required" });
@@ -289,7 +291,32 @@ exports.completePayment = async (req, res) => {
 
       const payableAmount = myBookings.reduce((sum, b) => sum + Math.ceil(Number(b.fare) || 0), 0);
       const bookingIds = myBookings.map((b) => b.id);
+
+      // Call external payment API (Stripe) for non-cash payments
+      if (paymentMethod !== "cash") {
+        try {
+          // Stripe expects amount in cents (or smallest currency unit)
+          // We'll use 'bdt' as currency to match the local context
+          const paymentIntent = await stripe.paymentIntents.create({
+            amount: Math.round(payableAmount * 100),
+            currency: "bdt",
+            payment_method_types: ["card"],
+            description: `Ride ${rideId} payment for user ${userId}`,
+            metadata: {
+              rideId: rideId.toString(),
+              userId: userId.toString(),
+              seats: myBookings.map((b) => b.seatNo).join(","),
+            },
+          });
+          console.log(`Stripe Payment Intent created: ${paymentIntent.id}`);
+        } catch (stripeErr) {
+          console.error("Stripe Error:", stripeErr);
+          throw new Error("EXTERNAL_PAYMENT_FAILED");
+        }
+      }
+
       const now = new Date();
+
 
       await tx.seatBooking.updateMany({
         where: { id: { in: bookingIds } },
@@ -327,6 +354,10 @@ exports.completePayment = async (req, res) => {
     if (err.message === "NO_ACTIVE_BOOKINGS") {
       return res.status(404).json({ error: "No active booked seats found for this passenger" });
     }
+    if (err.message === "EXTERNAL_PAYMENT_FAILED") {
+      return res.status(402).json({ error: "External payment failed. Please try again." });
+    }
+
     console.error(err);
     return res.status(500).json({ error: "Internal server error" });
   }
