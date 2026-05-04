@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:latlong2/latlong.dart';
 
 import 'session.dart';
 import 'backend_config.dart';
@@ -8,8 +9,15 @@ import 'ride_chat_page.dart';
 
 class SeatSelectionPage extends StatefulWidget {
   final int rideId;
+  final LatLng? pickupLocation;
+  final LatLng? destinationLocation;
 
-  const SeatSelectionPage({Key? key, required this.rideId}) : super(key: key);
+  const SeatSelectionPage({
+    Key? key, 
+    required this.rideId,
+    this.pickupLocation,
+    this.destinationLocation,
+  }) : super(key: key);
 
   @override
   State<SeatSelectionPage> createState() => _SeatSelectionPageState();
@@ -39,10 +47,17 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
     if (!mounted) return;
     setState(() => isLoading = true);
     try {
-      final userIdQuery =
-          Session.userId != null ? "?userId=${Session.userId}" : "";
-      final url =
-          "$backendUrl/seat-booking/${widget.rideId}/seats$userIdQuery";
+      final queryParams = <String>[];
+      if (Session.userId != null) queryParams.add("userId=${Session.userId}");
+      if (widget.pickupLocation != null && widget.destinationLocation != null) {
+        queryParams.add("pickupLat=${widget.pickupLocation!.latitude}");
+        queryParams.add("pickupLng=${widget.pickupLocation!.longitude}");
+        queryParams.add("dropLat=${widget.destinationLocation!.latitude}");
+        queryParams.add("dropLng=${widget.destinationLocation!.longitude}");
+      }
+
+      final queryString = queryParams.isNotEmpty ? "?${queryParams.join("&")}" : "";
+      final url = "$backendUrl/seat-booking/${widget.rideId}/seats$queryString";
 
       final res = await http.get(Uri.parse(url));
       final data = jsonDecode(res.body);
@@ -148,6 +163,10 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
           "rideId": widget.rideId,
           "userId": Session.userId,
           "seats": selectedSeats.toList()..sort(),
+          "pickupLat": widget.pickupLocation?.latitude,
+          "pickupLng": widget.pickupLocation?.longitude,
+          "dropLat": widget.destinationLocation?.latitude,
+          "dropLng": widget.destinationLocation?.longitude,
         }),
       );
 

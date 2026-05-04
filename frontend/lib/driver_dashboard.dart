@@ -145,19 +145,6 @@ class _DriverDashboardState extends State<DriverDashboard> {
                               ),
                       ),
                       const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildActionButton(
-                          'File Complaint',
-                          Icons.report_problem_outlined,
-                          () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const ComplaintsPage()),
-                            );
-                          },
-                        ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 16),

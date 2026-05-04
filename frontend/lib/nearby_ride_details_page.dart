@@ -343,6 +343,8 @@ class NearbyRideDetailsPage extends StatelessWidget {
           rideId: ride['id'] is int 
               ? ride['id'] 
               : int.tryParse(ride['id'].toString()) ?? 0,
+          pickupLocation: pickupLocation,
+          destinationLocation: destinationLocation,
         ),
       ),
     );
