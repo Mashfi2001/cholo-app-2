@@ -1,5 +1,5 @@
 const prisma = require("../lib/prisma");
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const stripe = process.env.STRIPE_SECRET_KEY ? require("stripe")(process.env.STRIPE_SECRET_KEY) : null;
 
 const {
   passengerFareForRide,
@@ -297,6 +297,9 @@ exports.completePayment = async (req, res) => {
         try {
           // Stripe expects amount in cents (or smallest currency unit)
           // We'll use 'bdt' as currency to match the local context
+          if (!stripe) {
+            throw new Error("STRIPE_NOT_CONFIGURED");
+          }
           const paymentIntent = await stripe.paymentIntents.create({
             amount: Math.round(payableAmount * 100),
             currency: "bdt",
@@ -356,6 +359,9 @@ exports.completePayment = async (req, res) => {
     }
     if (err.message === "EXTERNAL_PAYMENT_FAILED") {
       return res.status(402).json({ error: "External payment failed. Please try again." });
+    }
+    if (err.message === "STRIPE_NOT_CONFIGURED") {
+      return res.status(503).json({ error: "Stripe payment is not configured on this server." });
     }
 
     console.error(err);
