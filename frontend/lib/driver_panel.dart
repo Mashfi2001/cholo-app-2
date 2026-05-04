@@ -356,7 +356,10 @@ class _DriverPanelState extends State<DriverPanel> {
                     onTap: handleMapTap,
                   ),
                   children: [
-                    TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+                    TileLayer(
+                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.cholo.app',
+                    ),
                     if (startLocation != null) MarkerLayer(markers: [Marker(point: startLocation!, child: const Icon(Icons.location_on, color: Colors.green, size: 30))]),
                     if (endLocation != null) MarkerLayer(markers: [Marker(point: endLocation!, child: const Icon(Icons.location_on, color: Colors.red, size: 30))]),
                     if (routePoints.isNotEmpty) PolylineLayer(polylines: [Polyline(points: routePoints, color: Colors.blue, strokeWidth: 3.0)]),

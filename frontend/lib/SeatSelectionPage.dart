@@ -24,6 +24,7 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
   bool isConfirming = false;
   bool isProcessingPayment = false;
   int? unitPassengerFare;
+  Map<String, dynamic>? globalActiveBooking;
 
   @override
   void initState() {
@@ -54,6 +55,18 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
             ? null
             : (u is num ? u.ceil() : int.tryParse(u.toString()));
       });
+
+      // Also fetch global active booking to prevent multi-ride booking
+      if (Session.userId != null) {
+        final gRes = await http.get(
+          Uri.parse('$backendUrl/seat-booking/passenger/${Session.userId}/active'),
+        );
+        if (gRes.statusCode == 200) {
+          setState(() {
+            globalActiveBooking = jsonDecode(gRes.body)['booking'];
+          });
+        }
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -66,6 +79,12 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
   }
 
   void onSeatTapped(int seatNo) {
+    if (globalActiveBooking != null && globalActiveBooking!['rideId'] != widget.rideId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("You already have an active booking in another ride."))
+      );
+      return;
+    }
     if (bookedSeats.contains(seatNo) || myBookedSeats.isNotEmpty || myPendingSeats.isNotEmpty) return;
     setState(() {
       if (selectedSeats.contains(seatNo)) {
@@ -97,6 +116,13 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
     if (selectedSeats.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Select at least one seat")));
+      return;
+    }
+
+    if (globalActiveBooking != null && globalActiveBooking!['rideId'] != widget.rideId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("You already have an active booking in another ride."))
+      );
       return;
     }
 

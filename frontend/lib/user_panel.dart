@@ -9,6 +9,9 @@ import 'broadcast_banner.dart';
 import 'session.dart';
 import 'backend_config.dart';
 import 'passenger_rides_list.dart';
+import 'SeatSelectionPage.dart';
+import 'ride_details_page.dart';
+
 
 class UserPanel extends StatefulWidget {
   final int userId;
@@ -28,6 +31,7 @@ class _UserPanelState extends State<UserPanel> {
   List<dynamic> notifications = [];
   bool isLoading = true;
   Map<String, dynamic>? userData;
+  Map<String, dynamic>? activeBooking;
 
   @override
   void initState() {
@@ -50,11 +54,17 @@ class _UserPanelState extends State<UserPanel> {
         ),
       );
 
+      final bookingRes = await http.get(
+        Uri.parse('$backendUrl/seat-booking/passenger/${Session.userId}/active'),
+      );
+
       if (notifRes.statusCode == 200 && userRes.statusCode == 200) {
         final notifBody = jsonDecode(notifRes.body);
+        final bookingData = bookingRes.statusCode == 200 ? jsonDecode(bookingRes.body)['booking'] : null;
         setState(() {
           notifications = List<dynamic>.from(notifBody['notifications'] ?? []);
           userData = jsonDecode(userRes.body) as Map<String, dynamic>;
+          activeBooking = bookingData;
           isLoading = false;
         });
       } else {
@@ -220,6 +230,63 @@ class _UserPanelState extends State<UserPanel> {
                     ),
                     const SizedBox(height: 32),
 
+                    // Active/Pending Ride Status for Passenger
+                    if (activeBooking != null) ...[
+                      const Text(
+                        'Current Trip',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2C323A),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (activeBooking!['status'] == 'PENDING')
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.hourglass_empty, color: Colors.blue),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Request Sent',
+                                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+                                    ),
+                                    Text(
+                                      'Waiting for driver\'s decision for ${activeBooking!['ride']['origin']} to ${activeBooking!['ride']['destination']}',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (activeBooking!['status'] == 'APPROVED')
+                        _buildActionButton(
+                          'Running Ride',
+                          Icons.directions_run,
+                          () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => SeatSelectionPage(rideId: activeBooking!['rideId']),
+                              ),
+                            ).then((_) => fetchData());
+                          },
+                          color: Colors.green,
+                        ),
+                      const SizedBox(height: 24),
+                    ],
+
                     const Text(
                       'Quick Actions',
                       style: TextStyle(
@@ -235,13 +302,15 @@ class _UserPanelState extends State<UserPanel> {
                           child: _buildActionButton(
                             'Book Ride',
                             Icons.directions_car,
-                            () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) => const BookRidePage(),
-                                ),
-                              );
-                            },
+                            activeBooking != null 
+                                ? null // Disable if they already have an active/pending ride
+                                : () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (context) => const BookRidePage(),
+                                      ),
+                                    ).then((_) => fetchData());
+                                  },
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -426,16 +495,18 @@ class _UserPanelState extends State<UserPanel> {
   Widget _buildActionButton(
     String title,
     IconData icon,
-    VoidCallback onPressed,
-  ) {
+    VoidCallback? onPressed, {
+    Color? color,
+  }) {
     return ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFFF98825),
+        backgroundColor: color ?? const Color(0xFFF98825),
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 0,
+        disabledBackgroundColor: Colors.grey.shade300,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

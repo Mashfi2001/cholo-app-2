@@ -46,11 +46,17 @@ async function extractTextFromImage(imagePath) {
   try {
     const apiKey = process.env.OCR_SPACE_API_KEY;
     if (!apiKey) {
-      throw new Error("OCR_SPACE_API_KEY not configured");
+      console.warn("OCR_SPACE_API_KEY not configured, skipping OCR");
+      return "";
     }
 
+    // Read and convert to JPEG to ensure compatibility with OCR.space
     const imageBuffer = await fs.readFile(imagePath);
-    const base64Image = imageBuffer.toString('base64');
+    const jpegBuffer = await sharp(imageBuffer)
+      .toFormat('jpeg')
+      .toBuffer();
+    
+    const base64Image = jpegBuffer.toString('base64');
     const defaultLanguage = process.env.OCR_SPACE_LANGUAGE || 'eng';
 
     const createForm = (language) => {
@@ -66,6 +72,8 @@ async function extractTextFromImage(imagePath) {
 
     const primaryForm = createForm(defaultLanguage);
     const primaryHeaders = primaryForm.getHeaders();
+    console.log(`Sending OCR request (length: ${base64Image.length})...`);
+    
     const primaryResponse = await axios.post('https://api.ocr.space/parse/image', primaryForm, {
       headers: primaryHeaders,
       timeout: 30000,
@@ -74,11 +82,14 @@ async function extractTextFromImage(imagePath) {
     if (primaryResponse.data && primaryResponse.data.ParsedResults && primaryResponse.data.ParsedResults.length > 0) {
       const parsedText = primaryResponse.data.ParsedResults[0].ParsedText || "";
       if (parsedText.trim().length > 0) {
+        console.log("OCR Success (Primary Language)");
         return parsedText;
       }
     }
 
+    // Fallback to Bangla if primary failed or returned nothing
     if (defaultLanguage !== 'ben') {
+      console.log("OCR Primary empty/failed, trying Bangla fallback...");
       const fallbackForm = createForm('ben');
       const fallbackHeaders = fallbackForm.getHeaders();
       const fallbackResponse = await axios.post('https://api.ocr.space/parse/image', fallbackForm, {
@@ -87,10 +98,12 @@ async function extractTextFromImage(imagePath) {
       });
 
       if (fallbackResponse.data && fallbackResponse.data.ParsedResults && fallbackResponse.data.ParsedResults.length > 0) {
+        console.log("OCR Success (Fallback Language)");
         return fallbackResponse.data.ParsedResults[0].ParsedText || "";
       }
     }
 
+    console.warn("OCR returned no text");
     return "";
   } catch (error) {
     console.error("OCR.space Error:", error.response?.data || error.message);

@@ -1,5 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -25,7 +26,8 @@ class VerificationRequestPage extends StatefulWidget {
 
 class _VerificationRequestPageState extends State<VerificationRequestPage> {
   String selectedDocumentType = 'NID';
-  File? selectedImage;
+  Uint8List? selectedImageBytes;
+  String? selectedImageName;
   bool isLoading = false;
   String? currentVerificationStatus;
   Map<String, dynamic>? currentRequest;
@@ -72,8 +74,10 @@ class _VerificationRequestPageState extends State<VerificationRequestPage> {
       );
 
       if (image != null) {
+        final bytes = await image.readAsBytes();
         setState(() {
-          selectedImage = File(image.path);
+          selectedImageBytes = bytes;
+          selectedImageName = image.name;
         });
       }
     } catch (e) {
@@ -87,7 +91,7 @@ class _VerificationRequestPageState extends State<VerificationRequestPage> {
   }
 
   Future<void> _submitVerification() async {
-    if (selectedImage == null) {
+    if (selectedImageBytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a document image')),
       );
@@ -108,16 +112,14 @@ class _VerificationRequestPageState extends State<VerificationRequestPage> {
       request.fields['documentType'] = selectedDocumentType;
 
       // Get file extension safely
-      final filePath = selectedImage!.path;
-      final ext = path.extension(filePath).toLowerCase();
+      final filename = selectedImageName ?? 'document.jpg';
+      final ext = path.extension(filename).toLowerCase();
       final mimeType = ext.isNotEmpty ? ext.substring(1) : 'jpeg';
-      final filename = path.basename(filePath);
 
-      // Read file bytes and create multipart file
-      final fileBytes = await selectedImage!.readAsBytes();
+      // Create multipart file from bytes
       var imageFile = http.MultipartFile.fromBytes(
         'document',
-        fileBytes,
+        selectedImageBytes!,
         filename: filename,
         contentType: MediaType('image', mimeType),
       );
@@ -137,7 +139,8 @@ class _VerificationRequestPageState extends State<VerificationRequestPage> {
         _checkVerificationStatus();
         // Clear the form
         setState(() {
-          selectedImage = null;
+          selectedImageBytes = null;
+          selectedImageName = null;
           selectedDocumentType = 'NID';
         });
       } else {
@@ -324,7 +327,7 @@ class _VerificationRequestPageState extends State<VerificationRequestPage> {
                     const SizedBox(height: 12),
 
                     // Image Preview or Picker
-                    if (selectedImage != null)
+                    if (selectedImageBytes != null)
                       Container(
                         width: double.infinity,
                         height: 200,
@@ -332,7 +335,7 @@ class _VerificationRequestPageState extends State<VerificationRequestPage> {
                           border: Border.all(color: Colors.grey.shade300),
                           borderRadius: BorderRadius.circular(8),
                           image: DecorationImage(
-                            image: FileImage(selectedImage!),
+                            image: MemoryImage(selectedImageBytes!),
                             fit: BoxFit.cover,
                           ),
                         ),
@@ -343,7 +346,10 @@ class _VerificationRequestPageState extends State<VerificationRequestPage> {
                               right: 8,
                               child: IconButton(
                                 onPressed: () =>
-                                    setState(() => selectedImage = null),
+                                    setState(() {
+                                      selectedImageBytes = null;
+                                      selectedImageName = null;
+                                    }),
                                 icon: const Icon(
                                   Icons.close,
                                   color: Colors.white,
