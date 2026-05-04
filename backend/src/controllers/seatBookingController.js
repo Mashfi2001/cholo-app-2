@@ -43,9 +43,18 @@ exports.getSeatsByRide = async (req, res) => {
 
     let unitPassengerFare = null;
     let billableDistanceKm = null;
+    
+    // Extract passenger coordinates from query params
+    const passengerCoords = {
+      pickupLat: req.query.pickupLat ? Number(req.query.pickupLat) : null,
+      pickupLng: req.query.pickupLng ? Number(req.query.pickupLng) : null,
+      dropLat: req.query.dropLat ? Number(req.query.dropLat) : null,
+      dropLng: req.query.dropLng ? Number(req.query.dropLng) : null,
+    };
+
     try {
-      unitPassengerFare = passengerFareForRide(ride);
-      billableDistanceKm = billableDistanceKmForRide(ride);
+      unitPassengerFare = passengerFareForRide(ride, passengerCoords);
+      billableDistanceKm = billableDistanceKmForRide(ride, passengerCoords);
     } catch (e) {
       if (e.code !== "NO_DISTANCE_FOR_FARE") throw e;
     }
@@ -185,8 +194,17 @@ exports.createSeatBooking = async (req, res) => {
       }
 
       let unitFare;
+      
+      // Extract passenger coordinates from request body
+      const passengerCoords = {
+        pickupLat: req.body.pickupLat ? Number(req.body.pickupLat) : null,
+        pickupLng: req.body.pickupLng ? Number(req.body.pickupLng) : null,
+        dropLat: req.body.dropLat ? Number(req.body.dropLat) : null,
+        dropLng: req.body.dropLng ? Number(req.body.dropLng) : null,
+      };
+
       try {
-        unitFare = passengerFareForRide(ride);
+        unitFare = passengerFareForRide(ride, passengerCoords);
       } catch (e) {
         if (e.code === "NO_DISTANCE_FOR_FARE") throw new Error("NO_DISTANCE_FOR_FARE");
         throw e;

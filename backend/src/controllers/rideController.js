@@ -76,6 +76,15 @@ exports.getRideById = async (req, res) => {
 
     const ride = await prisma.ride.findUnique({
       where: { id },
+      include: {
+        driver: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
     });
 
     if (!ride) {

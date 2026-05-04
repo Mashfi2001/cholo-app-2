@@ -1,15 +1,24 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:latlong2/latlong.dart';
 
 import 'session.dart';
 import 'backend_config.dart';
 import 'ride_chat_page.dart';
+import 'DriverProfilePage.dart';
 
 class SeatSelectionPage extends StatefulWidget {
   final int rideId;
+  final LatLng? pickupLocation;
+  final LatLng? destinationLocation;
 
-  const SeatSelectionPage({Key? key, required this.rideId}) : super(key: key);
+  const SeatSelectionPage({
+    Key? key, 
+    required this.rideId,
+    this.pickupLocation,
+    this.destinationLocation,
+  }) : super(key: key);
 
   @override
   State<SeatSelectionPage> createState() => _SeatSelectionPageState();
@@ -39,10 +48,17 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
     if (!mounted) return;
     setState(() => isLoading = true);
     try {
-      final userIdQuery =
-          Session.userId != null ? "?userId=${Session.userId}" : "";
-      final url =
-          "$backendUrl/seat-booking/${widget.rideId}/seats$userIdQuery";
+      final queryParams = <String>[];
+      if (Session.userId != null) queryParams.add("userId=${Session.userId}");
+      if (widget.pickupLocation != null && widget.destinationLocation != null) {
+        queryParams.add("pickupLat=${widget.pickupLocation!.latitude}");
+        queryParams.add("pickupLng=${widget.pickupLocation!.longitude}");
+        queryParams.add("dropLat=${widget.destinationLocation!.latitude}");
+        queryParams.add("dropLng=${widget.destinationLocation!.longitude}");
+      }
+
+      final queryString = queryParams.isNotEmpty ? "?${queryParams.join("&")}" : "";
+      final url = "$backendUrl/seat-booking/${widget.rideId}/seats$queryString";
 
       final res = await http.get(Uri.parse(url));
       final data = jsonDecode(res.body);
@@ -148,6 +164,10 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
           "rideId": widget.rideId,
           "userId": Session.userId,
           "seats": selectedSeats.toList()..sort(),
+          "pickupLat": widget.pickupLocation?.latitude,
+          "pickupLng": widget.pickupLocation?.longitude,
+          "dropLat": widget.destinationLocation?.latitude,
+          "dropLng": widget.destinationLocation?.longitude,
         }),
       );
 
@@ -403,6 +423,7 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
           ),
         ));
         await fetchSeats();
+        _showRatingDialog();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(body["error"]?.toString() ?? "Payment failed")));
@@ -416,6 +437,85 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
         setState(() => isProcessingPayment = false);
       }
     }
+  }
+
+  Future<void> _showRatingDialog() async {
+    int selectedStars = 5;
+    final commentController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateDialog) => AlertDialog(
+          title: const Text("Rate Your Driver"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("How was your ride?"),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) {
+                  return IconButton(
+                    icon: Icon(
+                      index < selectedStars ? Icons.star : Icons.star_border,
+                      color: Colors.amber,
+                      size: 32,
+                    ),
+                    onPressed: () {
+                      setStateDialog(() => selectedStars = index + 1);
+                    },
+                  );
+                }),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: commentController,
+                decoration: const InputDecoration(
+                  hintText: "Add a comment (optional)",
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Skip for now"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final driverId = rideDetails?['driver']?['id'];
+                if (driverId == null) {
+                  Navigator.pop(context);
+                  return;
+                }
+
+                try {
+                  await http.post(
+                    Uri.parse("$backendUrl/api/ratings"),
+                    headers: {"Content-Type": "application/json"},
+                    body: jsonEncode({
+                      "rideId": widget.rideId,
+                      "userId": Session.userId,
+                      "driverId": driverId,
+                      "stars": selectedStars,
+                      "comment": commentController.text.trim(),
+                    }),
+                  );
+                } catch (e) {
+                  debugPrint("Error submitting rating: $e");
+                }
+                Navigator.pop(context);
+              },
+              child: const Text("Submit"),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /* ─── UI BUILDERS ─── */
@@ -748,28 +848,43 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
 
   /// Non-interactive driver tile.
   Widget _buildDriverTile() {
-    return Container(
-      width: 64,
-      height: 52,
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.person, size: 18, color: Colors.grey.shade500),
-          const SizedBox(height: 2),
-          Text(
-            "Driver",
-            style: TextStyle(
-              fontSize: 8,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey.shade500,
+    return GestureDetector(
+      onTap: () {
+        final driverId = rideDetails?['driver']?['id'];
+        if (driverId != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => DriverProfilePage(
+                userId: driverId,
+              ),
             ),
-          ),
-        ],
+          );
+        }
+      },
+      child: Container(
+        width: 64,
+        height: 52,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person, size: 18, color: Colors.grey.shade500),
+            const SizedBox(height: 2),
+            Text(
+              "Driver",
+              style: TextStyle(
+                fontSize: 8,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

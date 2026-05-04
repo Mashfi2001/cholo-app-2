@@ -13,6 +13,7 @@ const seatBookingRoutes = require("./routes/seatBookingRoutes");
 const complaintRoutes = require("./routes/complaintRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const chatRoutes = require("./routes/chatRoutes");
+const ratingRoutes = require("./routes/ratingRoutes");
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use("/api/verification", verificationRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/broadcasts", broadcastRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/ratings", ratingRoutes);
 
 // Global error handler for file upload and backend errors
 app.use((err, req, res, next) => {

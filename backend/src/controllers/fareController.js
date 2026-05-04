@@ -27,8 +27,19 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-function rawDistanceKmForRide(ride) {
+function rawDistanceKmForRide(ride, passengerCoords = null) {
   const { originLat, originLng, destinationLat, destinationLng, routeDistanceKm } = ride;
+  
+  // Use passenger coordinates if provided
+  if (passengerCoords && passengerCoords.pickupLat && passengerCoords.pickupLng && passengerCoords.dropLat && passengerCoords.dropLng) {
+    return haversineKm(
+      passengerCoords.pickupLat, 
+      passengerCoords.pickupLng, 
+      passengerCoords.dropLat, 
+      passengerCoords.dropLng
+    );
+  }
+
   const fromCoords = haversineKm(originLat, originLng, destinationLat, destinationLng);
   if (fromCoords != null && !Number.isNaN(fromCoords) && fromCoords > 0) {
     return fromCoords;
@@ -39,14 +50,14 @@ function rawDistanceKmForRide(ride) {
   return null;
 }
 
-function billableDistanceKmForRide(ride) {
-  const raw = rawDistanceKmForRide(ride);
+function billableDistanceKmForRide(ride, passengerCoords = null) {
+  const raw = rawDistanceKmForRide(ride, passengerCoords);
   if (raw == null) return null;
   return Math.max(MIN_TRIP_KM, raw);
 }
 
-function passengerFareForRide(ride) {
-  const billable = billableDistanceKmForRide(ride);
+function passengerFareForRide(ride, passengerCoords = null) {
+  const billable = billableDistanceKmForRide(ride, passengerCoords);
   if (billable == null) {
     const err = new Error("NO_DISTANCE_FOR_FARE");
     err.code = "NO_DISTANCE_FOR_FARE";

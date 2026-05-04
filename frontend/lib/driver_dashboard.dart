@@ -8,6 +8,7 @@ import 'login_screen.dart';
 import 'session.dart';
 import 'complaints_page.dart';
 import 'backend_config.dart';
+import 'DriverProfilePage.dart';
 
 class DriverDashboard extends StatefulWidget {
   final int userId;
@@ -145,19 +146,6 @@ class _DriverDashboardState extends State<DriverDashboard> {
                               ),
                       ),
                       const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildActionButton(
-                          'File Complaint',
-                          Icons.report_problem_outlined,
-                          () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const ComplaintsPage()),
-                            );
-                          },
-                        ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -203,9 +191,17 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     children: [
                       Expanded(
                         child: _buildActionButton(
-                          'Support',
-                          Icons.help_outline,
-                          () {},
+                          'Profile',
+                          Icons.person_outline,
+                          () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => DriverProfilePage(
+                                  userId: widget.userId,
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
                       const SizedBox(width: 16),

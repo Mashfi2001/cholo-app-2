@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'session.dart';
 import 'backend_config.dart';
 import 'ride_chat_page.dart';
+import 'DriverProfilePage.dart';
 
 class PassengerRideDetails extends StatefulWidget {
   final dynamic ride;
@@ -875,9 +876,51 @@ class _PassengerRideDetailsState extends State<PassengerRideDetails> {
                             'Driver Information',
                             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                           ),
-                          const SizedBox(height: 8),
-                          _infoRow(Icons.person, 'Name', driver?['name'] ?? 'N/A'),
-                          _infoRow(Icons.email, 'Email', driver?['email'] ?? 'N/A'),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              const CircleAvatar(
+                                radius: 22,
+                                backgroundColor: Color(0xFFF98825),
+                                child: Icon(Icons.person, color: Colors.white),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      driver?['name'] ?? 'Driver',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                    ),
+                                    Text(
+                                      driver?['email'] ?? 'N/A',
+                                      style: const TextStyle(color: Colors.grey, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              OutlinedButton(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => DriverProfilePage(
+                                        userId: driver?['id'] ?? widget.ride['driverId'],
+                                      ),
+                                    ),
+                                  );
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFFF98825),
+                                  side: const BorderSide(color: Color(0xFFF98825)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                ),
+                                child: const Text('View Profile', style: TextStyle(fontSize: 11)),
+                              ),
+                            ],
+                          ),
                           const SizedBox(height: 8),
                           const SizedBox(height: 8),
                           Row(
