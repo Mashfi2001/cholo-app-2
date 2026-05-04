@@ -27,10 +27,9 @@ class _PassengerRidesListState extends State<PassengerRidesList> {
     setState(() => isLoading = true);
     
     try {
-      // Fetch all rides (temporary - will be replaced with passenger-specific rides later)
+      // Fetch passenger ride history
       final response = await http.get(
-        Uri.parse('$backendUrl/api/rides'),
-        headers: {'Authorization': 'Bearer ${Session.userId}'},
+        Uri.parse('$backendUrl/seat-booking/passenger/${Session.userId}/history'),
       );
       
       if (response.statusCode == 200) {
@@ -53,7 +52,7 @@ class _PassengerRidesListState extends State<PassengerRidesList> {
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
-        title: const Text('My Rides'),
+        title: const Text('Ride History'),
         backgroundColor: brandOrange,
         foregroundColor: Colors.white,
         elevation: 0,

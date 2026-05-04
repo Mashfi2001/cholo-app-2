@@ -316,7 +316,7 @@ class _UserPanelState extends State<UserPanel> {
                         const SizedBox(width: 16),
                         Expanded(
                           child: _buildActionButton(
-                            'My Rides',
+                            'Ride History',
                             Icons.history,
                             () {
                               Navigator.of(context).push(

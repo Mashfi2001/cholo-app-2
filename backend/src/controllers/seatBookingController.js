@@ -492,3 +492,112 @@ exports.decideSeatBookingRequest = async (req, res) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 };
+
+exports.getActiveBooking = async (req, res) => {
+  const userId = Number(req.params.userId);
+  if (!Number.isInteger(userId)) {
+    return res.status(400).json({ error: "Invalid userId" });
+  }
+
+  try {
+    const booking = await prisma.seatBooking.findFirst({
+      where: {
+        userId,
+        paidAt: null,
+        ride: {
+          status: { in: ["PLANNED", "ONGOING"] },
+        },
+      },
+      include: {
+        ride: {
+          select: {
+            id: true,
+            origin: true,
+            destination: true,
+            departureTime: true,
+            status: true,
+            driverId: true,
+            driver: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!booking) {
+      return res.json({ booking: null });
+    }
+
+    // Map status based on paymentMethod marker
+    const status = booking.paymentMethod === "__PENDING_DRIVER_APPROVAL__" ? "PENDING" : "APPROVED";
+
+    return res.json({
+      booking: {
+        ...booking,
+        status,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+exports.getPassengerRideHistory = async (req, res) => {
+  const userId = Number(req.params.userId);
+  if (!Number.isInteger(userId)) {
+    return res.status(400).json({ error: "Invalid userId" });
+  }
+
+  try {
+    // Find all rides where the user had a booking and the ride is COMPLETED or CANCELLED
+    // Or if the ride is finished (paidAt is not null)
+    const bookings = await prisma.seatBooking.findMany({
+      where: {
+        userId,
+        OR: [
+          { paidAt: { not: null } },
+          { ride: { status: { in: ["COMPLETED", "CANCELLED"] } } },
+        ],
+      },
+      include: {
+        ride: {
+          include: {
+            driver: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    // Group bookings by ride to avoid duplicates if user booked multiple seats
+    const rideMap = new Map();
+    for (const b of bookings) {
+      if (!rideMap.has(b.rideId)) {
+        rideMap.set(b.rideId, {
+          ...b.ride,
+          status: b.ride.status,
+          bookedAt: b.createdAt,
+          paidAt: b.paidAt,
+        });
+      }
+    }
+
+    return res.json({ rides: Array.from(rideMap.values()) });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};

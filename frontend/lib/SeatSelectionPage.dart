@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import 'session.dart';
 import 'backend_config.dart';
+import 'ride_chat_page.dart';
 
 class SeatSelectionPage extends StatefulWidget {
   final int rideId;
@@ -25,6 +26,8 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
   bool isProcessingPayment = false;
   int? unitPassengerFare;
   Map<String, dynamic>? globalActiveBooking;
+  Map<String, dynamic>? rideDetails;
+  bool _isSubmittingComplaint = false;
 
   @override
   void initState() {
@@ -66,6 +69,16 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
             globalActiveBooking = jsonDecode(gRes.body)['booking'];
           });
         }
+      }
+
+      // Fetch ride details for driver info
+      final rideRes = await http.get(
+        Uri.parse('$backendUrl/api/rides/${widget.rideId}'),
+      );
+      if (rideRes.statusCode == 200) {
+        setState(() {
+          rideDetails = jsonDecode(rideRes.body);
+        });
       }
     } catch (e) {
       if (!mounted) return;
@@ -855,6 +868,31 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
                   ],
                 ),
               ),
+              if (rideDetails != null && rideDetails!['driverId'] != null)
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chat_bubble_outline, color: Color(0xFF16A34A), size: 20),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => RideChatPage(
+                              rideId: widget.rideId,
+                              rideTitle: '${rideDetails!['origin']} to ${rideDetails!['destination']}',
+                              otherUserId: rideDetails!['driverId'],
+                              otherUserName: rideDetails!['driver']?['name'] ?? 'Driver',
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.report_problem_outlined, color: Colors.red, size: 20),
+                      onPressed: () => _showComplaintDialog(),
+                    ),
+                  ],
+                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -920,19 +958,109 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
                     color: Color(0xFF92400E),
                   ),
                 ),
-                Text(
-                  "Seat ${myPendingSeats.join(", ")} requested. You can pay after driver accepts.",
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFFB45309),
-                  ),
+                    Text(
+                      "Seat ${myPendingSeats.join(", ")} requested. You can pay after driver accepts.",
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFFB45309),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              if (rideDetails != null && rideDetails!['driverId'] != null)
+                IconButton(
+                  icon: const Icon(Icons.chat_bubble_outline, color: Color(0xFFD97706), size: 20),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => RideChatPage(
+                          rideId: widget.rideId,
+                          rideTitle: '${rideDetails!['origin']} to ${rideDetails!['destination']}',
+                          otherUserId: rideDetails!['driverId'],
+                          otherUserName: rideDetails!['driver']?['name'] ?? 'Driver',
+                        ),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+    );
+  }
+
+  void _showComplaintDialog() {
+    final TextEditingController complaintController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('File Complaint against ${rideDetails?['driver']?['name'] ?? 'Driver'}'),
+        content: TextField(
+          controller: complaintController,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Complaint Details',
+            hintText: 'Describe what happened...',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (complaintController.text.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please describe the complaint')),
+                );
+                return;
+              }
+              Navigator.pop(context);
+              await _submitComplaint(complaintController.text);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Submit Complaint', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _submitComplaint(String description) async {
+    setState(() => _isSubmittingComplaint = true);
+    try {
+      final response = await http.post(
+        Uri.parse('$backendUrl/api/complaints'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'complainantId': Session.userId,
+          'driverId': rideDetails?['driverId'],
+          'rideId': widget.rideId,
+          'description': description,
+          'title': 'Complaint from Passenger',
+          'type': 'DRIVER_COMPLAINT',
+        }),
+      );
+
+      if (response.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Complaint filed successfully! Admin will review it.')),
+        );
+      } else {
+        final error = jsonDecode(response.body);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error['error'] ?? 'Failed to file complaint')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    } finally {
+      setState(() => _isSubmittingComplaint = false);
+    }
   }
 
   /// Persistent bottom bar with fare summary and confirm button.

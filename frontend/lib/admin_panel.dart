@@ -36,79 +36,6 @@ class AdminPanel extends StatelessWidget {
               Image.asset('assets/cholo_logo.png', height: 80),
               const SizedBox(height: 40),
 
-              // Welcome Title
-              Text(
-                'Welcome to Admin Panel',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: darkText,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-
-              // Subtitle
-              Text(
-                'Manage your application settings and users',
-                style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 48),
-
-              // Admin Features List
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: brandOrange.withOpacity(0.2)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Admin Features',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: darkText,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildFeatureItem(
-                      'User Management',
-                      'Manage user accounts and permissions',
-                    ),
-                    _buildFeatureItem(
-                      'System Settings',
-                      'Configure application settings',
-                    ),
-                    _buildFeatureItem(
-                      'Analytics',
-                      'View application statistics',
-                    ),
-                    _buildFeatureItem('Complaints', 'View and manage complaints'),
-                    _buildFeatureItem(
-                      'Content Management',
-                      'Manage app content',
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
-
-              // Quick Actions
-              Text(
-                'Quick Actions',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: darkText,
-                ),
-              ),
-              const SizedBox(height: 16),
-
               Row(
                 children: [
                   Expanded(
@@ -205,37 +132,6 @@ class AdminPanel extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildFeatureItem(String title, String description) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.check_circle, color: const Color(0xFFF98825), size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                  ),
-                ),
-                Text(
-                  description,
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

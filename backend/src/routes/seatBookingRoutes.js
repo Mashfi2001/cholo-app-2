@@ -10,5 +10,7 @@ router.post(
   seatBookingController.decideSeatBookingRequest
 );
 router.post("/:rideId/complete-payment", seatBookingController.completePayment);
+router.get("/passenger/:userId/active", seatBookingController.getActiveBooking);
+router.get("/passenger/:userId/history", seatBookingController.getPassengerRideHistory);
 
 module.exports = router;
