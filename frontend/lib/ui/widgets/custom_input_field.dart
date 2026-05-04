@@ -51,73 +51,79 @@ class _CustomInputFieldState extends State<CustomInputField> {
 
   @override
   Widget build(BuildContext context) {
-    return Focus(
-      onFocusChange: (hasFocus) {
-        setState(() {
-          _isFocused = hasFocus;
-        });
-      },
-      child: Container(
-        height: widget.maxLines == 1 ? 52 : null,
-        decoration: BoxDecoration(
-          color: AppColors.cardBlack,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: _isFocused ? AppColors.pureWhite : AppColors.borderGray,
-            width: 1,
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: Focus(
+        onFocusChange: (hasFocus) {
+          setState(() {
+            _isFocused = hasFocus;
+          });
+        },
+        child: Container(
+          height: widget.maxLines == 1 ? 52 : null,
+          decoration: BoxDecoration(
+            color: AppColors.cardBlack,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _isFocused ? AppColors.pureWhite : AppColors.borderGray,
+              width: 1,
+            ),
           ),
-        ),
-        child: TextField(
-          controller: widget.controller,
-          readOnly: widget.readOnly,
-          enabled: widget.enabled,
-          keyboardType: widget.keyboardType,
-          obscureText: _obscureText,
-          maxLines: widget.maxLines,
-          onChanged: widget.onChanged,
-          onSubmitted: widget.onSubmitted,
-          onTap: widget.onTap,
-          style: GoogleFonts.dmSans(
-            fontSize: 16,
-            color: AppColors.pureWhite,
-          ),
-          decoration: InputDecoration(
-            labelText: widget.label,
-            hintText: widget.hint,
-            labelStyle: GoogleFonts.dmSans(
-              fontSize: 14,
-              color: AppColors.silverMid,
+          child: AbsorbPointer(
+            absorbing: widget.readOnly && widget.onTap != null,
+            child: TextField(
+              controller: widget.controller,
+              readOnly: widget.readOnly,
+              enabled: widget.enabled,
+              keyboardType: widget.keyboardType,
+              obscureText: _obscureText,
+              maxLines: widget.maxLines,
+              onChanged: widget.onChanged,
+              onSubmitted: widget.onSubmitted,
+              onTap: widget.onTap,
+              style: GoogleFonts.dmSans(
+                fontSize: 16,
+                color: AppColors.pureWhite,
+              ),
+              decoration: InputDecoration(
+                labelText: widget.label,
+                hintText: widget.hint,
+                labelStyle: GoogleFonts.dmSans(
+                  fontSize: 14,
+                  color: AppColors.silverMid,
+                ),
+                hintStyle: GoogleFonts.dmSans(
+                  fontSize: 14,
+                  color: AppColors.silverMid,
+                ),
+                prefixIcon: widget.prefix ??
+                    (widget.icon == null
+                        ? null
+                        : Icon(widget.icon, color: AppColors.silverMid, size: 20)),
+                suffixIcon: widget.obscureText
+                    ? IconButton(
+                        icon: Icon(
+                          _obscureText ? Icons.visibility_off : Icons.visibility,
+                          color: AppColors.silverMid,
+                          size: 20,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscureText = !_obscureText;
+                          });
+                        },
+                      )
+                    : null,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+              ),
             ),
-            hintStyle: GoogleFonts.dmSans(
-              fontSize: 14,
-              color: AppColors.silverMid,
-            ),
-            prefixIcon: widget.prefix ??
-                (widget.icon == null
-                    ? null
-                    : Icon(widget.icon, color: AppColors.silverMid, size: 20)),
-            suffixIcon: widget.obscureText
-                ? IconButton(
-                    icon: Icon(
-                      _obscureText ? Icons.visibility_off : Icons.visibility,
-                      color: AppColors.silverMid,
-                      size: 20,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _obscureText = !_obscureText;
-                      });
-                    },
-                  )
-                : null,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            disabledBorder: InputBorder.none,
           ),
         ),
       ),

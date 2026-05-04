@@ -41,6 +41,12 @@ class AppTextStyles {
     color: AppColors.silverMid,
   );
 
+  static TextStyle bodyS = GoogleFonts.dmSans(
+    fontSize: 12,
+    fontWeight: FontWeight.w400, // Regular
+    color: AppColors.silverMid,
+  );
+
   static TextStyle labelBold = GoogleFonts.dmSans(
     fontSize: 13,
     fontWeight: FontWeight.w600, // SemiBold

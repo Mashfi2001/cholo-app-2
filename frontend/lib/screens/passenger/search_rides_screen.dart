@@ -10,6 +10,7 @@ import '../../ui/app_text_styles.dart';
 import '../../ui/widgets/custom_button.dart';
 import '../../ui/widgets/custom_input_field.dart';
 import 'ride_results_screen.dart';
+import 'location_search_page.dart';
 
 class SearchRidesScreen extends StatefulWidget {
   const SearchRidesScreen({super.key});
@@ -347,12 +348,24 @@ class _SearchRidesScreenState extends State<SearchRidesScreen> {
                           hint: 'Select pickup',
                           icon: Icons.location_on,
                           readOnly: true,
-                          onTap: () {
-                            // Clear pickup to reselect
-                            setState(() {
-                              _pickupLocation = null;
-                              _pickupController.clear();
-                            });
+                          onTap: () async {
+                            final result = await Navigator.push<LocationSearchResult>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const LocationSearchPage(
+                                  title: 'Select Pickup',
+                                  hint: 'Enter pickup location',
+                                ),
+                              ),
+                            );
+                            if (result != null) {
+                              setState(() {
+                                _pickupLocation = result.location;
+                                _pickupController.text = result.name;
+                              });
+                              if (_destinationLocation != null) await _fetchRoute();
+                              _mapController.move(result.location, 14);
+                            }
                           },
                         ),
                       ),
@@ -368,20 +381,23 @@ class _SearchRidesScreenState extends State<SearchRidesScreen> {
                           hint: 'Select destination',
                           icon: Icons.flag,
                           readOnly: true,
-                          onTap: () {
-                            if (_pickupLocation == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Select pickup first',
-                                    style: AppTextStyles.bodyL.copyWith(color: AppColors.pureWhite),
-                                  ),
-                                  backgroundColor: AppColors.warningAmber,
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  margin: const EdgeInsets.all(16),
+                          onTap: () async {
+                            final result = await Navigator.push<LocationSearchResult>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const LocationSearchPage(
+                                  title: 'Select Destination',
+                                  hint: 'Enter destination',
                                 ),
-                              );
+                              ),
+                            );
+                            if (result != null) {
+                              setState(() {
+                                _destinationLocation = result.location;
+                                _destinationController.text = result.name;
+                              });
+                              if (_pickupLocation != null) await _fetchRoute();
+                              _mapController.move(result.location, 14);
                             }
                           },
                         ),
