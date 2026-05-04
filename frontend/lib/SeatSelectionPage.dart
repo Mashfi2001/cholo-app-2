@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import 'session.dart';
 import 'backend_config.dart';
 import 'ride_chat_page.dart';
+import 'DriverProfilePage.dart';
 
 class SeatSelectionPage extends StatefulWidget {
   final int rideId;
@@ -847,28 +848,43 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
 
   /// Non-interactive driver tile.
   Widget _buildDriverTile() {
-    return Container(
-      width: 64,
-      height: 52,
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.person, size: 18, color: Colors.grey.shade500),
-          const SizedBox(height: 2),
-          Text(
-            "Driver",
-            style: TextStyle(
-              fontSize: 8,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey.shade500,
+    return GestureDetector(
+      onTap: () {
+        final driverId = rideDetails?['driver']?['id'];
+        if (driverId != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => DriverProfilePage(
+                userId: driverId,
+              ),
             ),
-          ),
-        ],
+          );
+        }
+      },
+      child: Container(
+        width: 64,
+        height: 52,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person, size: 18, color: Colors.grey.shade500),
+            const SizedBox(height: 2),
+            Text(
+              "Driver",
+              style: TextStyle(
+                fontSize: 8,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

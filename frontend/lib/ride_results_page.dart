@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'nearby_ride_details_page.dart';
 import 'SeatSelectionPage.dart';
+import 'DriverProfilePage.dart';
 
 class RideResultsPage extends StatefulWidget {
   final dynamic searchResult;
@@ -187,6 +188,28 @@ class _RideResultsPageState extends State<RideResultsPage> {
                           style: TextStyle(
                             fontSize: 11,
                             color: Colors.grey,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => DriverProfilePage(
+                                  userId: ride['driver']?['id'] ?? 0,
+                                ),
+                              ),
+                            );
+                          },
+                          child: const Text(
+                            'View Profile',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFFF98825),
+                              fontWeight: FontWeight.bold,
+                              decoration: TextDecoration.underline,
+                            ),
                           ),
                         ),
                       ],
