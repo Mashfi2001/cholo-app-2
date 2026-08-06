@@ -23,8 +23,11 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _nameController = TextEditingController();
   bool _isLoading = false;
   bool _showSignup = false;
+  bool _showOtpVerification = false;
+  String _otpEmail = '';
   String _errorMessage = '';
   String _selectedRole = 'PASSENGER'; // Default role
+  final TextEditingController _otpController = TextEditingController();
 
   final Color brandOrange = const Color(0xFFF98825);
   final Color darkText = const Color(0xFF2C323A);
@@ -34,6 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 
@@ -90,8 +94,18 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       } else if (response.statusCode == 403) {
-        // Handle ban/suspension errors
+        // Handle ban/suspension errors or OTP requirement
         final error = jsonDecode(response.body);
+        
+        if (error['requiresOtp'] == true) {
+          setState(() {
+            _showOtpVerification = true;
+            _otpEmail = _emailController.text;
+            _errorMessage = error['error'] ?? 'Please verify your email.';
+          });
+          return;
+        }
+
         setState(() {
           _errorMessage = error['error'] ?? 'Login failed';
         });
@@ -204,17 +218,107 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Signup successful! Please login.')),
-        );
-        _nameController.clear();
-        setState(() {
-          _showSignup = false;
-        });
+        final data = jsonDecode(response.body);
+        if (data['requiresOtp'] == true) {
+          setState(() {
+            _showOtpVerification = true;
+            _otpEmail = _emailController.text;
+            _showSignup = false;
+            _errorMessage = '';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(data['message'] ?? 'Signup successful! Please verify OTP.')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Signup successful! Please login.')),
+          );
+          _nameController.clear();
+          setState(() {
+            _showSignup = false;
+          });
+        }
       } else {
         final error = jsonDecode(response.body);
         setState(() {
           _errorMessage = error['error'] ?? 'Signup failed';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Connection error: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _verifyOtp() async {
+    setState(() {
+      _errorMessage = '';
+      _isLoading = true;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse('$backendUrl/api/auth/verify-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': _otpEmail,
+          'otp': _otpController.text.trim(),
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Email verified successfully! You can now login.')),
+        );
+        setState(() {
+          _showOtpVerification = false;
+          _otpController.clear();
+        });
+      } else {
+        final error = jsonDecode(response.body);
+        setState(() {
+          _errorMessage = error['error'] ?? 'OTP Verification failed';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Connection error: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _resendOtp() async {
+    setState(() {
+      _errorMessage = '';
+      _isLoading = true;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse('$backendUrl/api/auth/resend-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': _otpEmail,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('A new OTP has been sent to your email.')),
+        );
+      } else {
+        final error = jsonDecode(response.body);
+        setState(() {
+          _errorMessage = error['error'] ?? 'Failed to resend OTP';
         });
       }
     } catch (e) {
@@ -243,18 +347,23 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 40),
 
               // Title
-              Text(
-                _showSignup ? 'Create Account' : 'Login',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: darkText,
+              if (!_showOtpVerification)
+                Text(
+                  _showSignup ? 'Create Account' : 'Login',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: darkText,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
+              if (!_showOtpVerification)
+                const SizedBox(height: 24),
+
+              if (_showOtpVerification)
+                _buildOtpView(),
 
               // Name Field (only for signup)
-              if (_showSignup)
+              if (_showSignup && !_showOtpVerification)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16.0),
                   child: TextField(
@@ -281,50 +390,54 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
 
               // Email/Username Field
-              TextField(
-                controller: _emailController,
-                enabled: !_isLoading,
-                decoration: InputDecoration(
-                  prefixIcon: Icon(Icons.person_outline, color: brandOrange),
-                  hintText: 'Email',
-                  hintStyle: TextStyle(color: Colors.orange.shade300),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(30),
-                    borderSide: BorderSide(color: brandOrange, width: 1.5),
+              if (!_showOtpVerification)
+                TextField(
+                  controller: _emailController,
+                  enabled: !_isLoading,
+                  decoration: InputDecoration(
+                    prefixIcon: Icon(Icons.person_outline, color: brandOrange),
+                    hintText: 'Email',
+                    hintStyle: TextStyle(color: Colors.orange.shade300),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide(color: brandOrange, width: 1.5),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide(color: brandOrange, width: 2.0),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(30),
-                    borderSide: BorderSide(color: brandOrange, width: 2.0),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-              ),
-              const SizedBox(height: 16),
+              if (!_showOtpVerification)
+                const SizedBox(height: 16),
 
               // Password Field
-              TextField(
-                controller: _passwordController,
-                enabled: !_isLoading,
-                obscureText: true,
-                decoration: InputDecoration(
-                  prefixIcon: Icon(Icons.lock_outline, color: brandOrange),
-                  hintText: 'Password',
-                  hintStyle: TextStyle(color: Colors.orange.shade300),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(30),
-                    borderSide: BorderSide(color: brandOrange, width: 1.5),
+              if (!_showOtpVerification)
+                TextField(
+                  controller: _passwordController,
+                  enabled: !_isLoading,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    prefixIcon: Icon(Icons.lock_outline, color: brandOrange),
+                    hintText: 'Password',
+                    hintStyle: TextStyle(color: Colors.orange.shade300),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide(color: brandOrange, width: 1.5),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide(color: brandOrange, width: 2.0),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(30),
-                    borderSide: BorderSide(color: brandOrange, width: 2.0),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-              ),
-              const SizedBox(height: 16),
+              if (!_showOtpVerification)
+                const SizedBox(height: 16),
 
               // Role Selection (only for signup)
-              if (_showSignup)
+              if (_showSignup && !_showOtpVerification)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16.0),
                   child: AbsorbPointer(
@@ -378,7 +491,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
 
               // Error Message
-              if (_errorMessage.isNotEmpty)
+              if (_errorMessage.isNotEmpty && !_showOtpVerification)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16.0),
                   child: Container(
@@ -395,7 +508,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
 
               // Forgot Password Link (only for login)
-              if (!_showSignup)
+              if (!_showSignup && !_showOtpVerification)
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
@@ -417,74 +530,176 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 24),
 
               // Action Button
-              ElevatedButton(
-                onPressed: _isLoading ? null : (_showSignup ? _signup : _login),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: brandOrange,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+              if (!_showOtpVerification)
+                ElevatedButton(
+                  onPressed: _isLoading ? null : (_showSignup ? _signup : _login),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: brandOrange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    elevation: 0,
                   ),
-                  elevation: 0,
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Text(
+                          _showSignup ? 'Sign Up' : 'Login',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 24,
-                        width: 24,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : Text(
-                        _showSignup ? 'Sign Up' : 'Login',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-              ),
               const SizedBox(height: 32),
 
               // Toggle between Login and Signup
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    _showSignup
-                        ? 'Already have an account? '
-                        : 'Not registered? ',
-                    style: TextStyle(color: darkText, fontSize: 16),
-                  ),
-                  GestureDetector(
-                    onTap: _isLoading
-                        ? null
-                        : () {
-                            setState(() {
-                              _showSignup = !_showSignup;
-                              _errorMessage = '';
-                              _emailController.clear();
-                              _passwordController.clear();
-                              _nameController.clear();
-                              _selectedRole = 'PASSENGER'; // Reset to default
-                            });
-                          },
-                    child: Text(
-                      _showSignup ? 'Login' : 'Sign Up',
-                      style: TextStyle(
-                        color: brandOrange,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+              if (!_showOtpVerification)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _showSignup
+                          ? 'Already have an account? '
+                          : 'Not registered? ',
+                      style: TextStyle(color: darkText, fontSize: 16),
+                    ),
+                    GestureDetector(
+                      onTap: _isLoading
+                          ? null
+                          : () {
+                              setState(() {
+                                _showSignup = !_showSignup;
+                                _errorMessage = '';
+                                _emailController.clear();
+                                _passwordController.clear();
+                                _nameController.clear();
+                                _selectedRole = 'PASSENGER'; // Reset to default
+                              });
+                            },
+                      child: Text(
+                        _showSignup ? 'Login' : 'Sign Up',
+                        style: TextStyle(
+                          color: brandOrange,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildOtpView() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 20),
+        Text(
+          'Email Verification',
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: darkText,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Please enter the 6-digit OTP sent to\n$_otpEmail',
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+        const SizedBox(height: 32),
+        TextField(
+          controller: _otpController,
+          enabled: !_isLoading,
+          keyboardType: TextInputType.number,
+          textAlign: TextAlign.center,
+          maxLength: 6,
+          style: const TextStyle(fontSize: 24, letterSpacing: 8),
+          decoration: InputDecoration(
+            hintText: '000000',
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(color: brandOrange, width: 1.5),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(color: brandOrange, width: 2.0),
+            ),
+            contentPadding: const EdgeInsets.symmetric(vertical: 16),
+            counterText: '',
+          ),
+        ),
+        const SizedBox(height: 24),
+        if (_errorMessage.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _errorMessage,
+                style: TextStyle(color: Colors.red.shade900),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _verifyOtp,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: brandOrange,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(30),
+            ),
+          ),
+          child: _isLoading
+              ? const SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                )
+              : const Text('Verify OTP', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        ),
+        const SizedBox(height: 16),
+        TextButton(
+          onPressed: _isLoading ? null : _resendOtp,
+          child: Text(
+            'Resend OTP',
+            style: TextStyle(color: brandOrange, fontWeight: FontWeight.bold),
+          ),
+        ),
+        TextButton(
+          onPressed: _isLoading
+              ? null
+              : () {
+                  setState(() {
+                    _showOtpVerification = false;
+                    _errorMessage = '';
+                  });
+                },
+          child: const Text('Back to Login', style: TextStyle(color: Colors.grey)),
+        ),
+      ],
     );
   }
 }
