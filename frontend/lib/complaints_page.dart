@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'session.dart';
@@ -31,7 +31,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
     try {
       final response = await http.get(
         Uri.parse('$backendUrl/api/complaints'),
-        headers: {'Authorization': 'Bearer ${Session.userId}'},
+        headers: {'Authorization': 'Bearer ${Session.token}'},
       );
       
       if (response.statusCode == 200) {
@@ -53,7 +53,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
         Uri.parse('$backendUrl/api/complaints/$complaintId/status'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${Session.userId}',
+          'Authorization': 'Bearer ${Session.token}',
         },
         body: jsonEncode({'status': newStatus}),
       );
@@ -178,19 +178,19 @@ Widget _buildComplaintCard(dynamic complaint) {
   
   switch (complaint['type']) {
     case 'DRIVER_COMPLAINT':
-      complaintTypeText = 'Driver → Passenger';
+      complaintTypeText = 'Driver â†’ Passenger';
       complaintIcon = Icons.drive_eta;
       complaintTypeColor = Colors.blue;
       againstText = 'Against: ${complaint['passenger']?['name'] ?? 'Unknown'}';
       break;
     case 'PASSENGER_TO_DRIVER':
-      complaintTypeText = 'Passenger → Driver';
+      complaintTypeText = 'Passenger â†’ Driver';
       complaintIcon = Icons.person;
       complaintTypeColor = Colors.orange;
       againstText = 'Against: Driver (${complaint['driver']?['name'] ?? 'Unknown'})';
       break;
     case 'PASSENGER_TO_PASSENGER':
-      complaintTypeText = 'Passenger → Passenger';
+      complaintTypeText = 'Passenger â†’ Passenger';
       complaintIcon = Icons.people;
       complaintTypeColor = Colors.purple;
       againstText = 'Against: ${complaint['passenger']?['name'] ?? 'Unknown'}';

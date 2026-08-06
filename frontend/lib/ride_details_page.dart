@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -152,7 +152,7 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
         passengers = allPassengers;
       });
       
-      print("✅ Loaded ${allPassengers.length} passengers (${allPassengers.where((p) => p['status'] == 'ACTIVE').length} active, ${allPassengers.where((p) => p['status'] == 'COMPLETED').length} completed)");
+      print("âœ… Loaded ${allPassengers.length} passengers (${allPassengers.where((p) => p['status'] == 'ACTIVE').length} active, ${allPassengers.where((p) => p['status'] == 'COMPLETED').length} completed)");
       
     } catch (e) {
       print("Error loading passengers: $e");
@@ -378,7 +378,7 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                               Uri.parse('$backendUrl/api/complaints'),
                               headers: {
                                 'Content-Type': 'application/json',
-                                'Authorization': 'Bearer ${Session.userId}',
+                                'Authorization': 'Bearer ${Session.token}',
                               },
                               body: jsonEncode({
                                 'driverId': Session.userId,

@@ -39,6 +39,24 @@ model User {
   receivedMessages    RideMessage[]         @relation("ReceivedMessages")
   givenRatings        Rating[]              @relation("GivenRatings")
   receivedRatings     Rating[]              @relation("ReceivedRatings")
+  sessions            Session[]
+}
+
+/// One row per signed-in device. A user may hold several active sessions at
+/// once, which is what keeps multi-device login working.
+model Session {
+  id         Int       @id @default(autoincrement())
+  tokenHash  String    @unique
+  userId     Int
+  deviceName String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model PendingUser {
@@ -49,6 +67,7 @@ model PendingUser {
   role         Role     @default(PASSENGER)
   otp          String
   otpExpiresAt DateTime
+  phone        String?
   createdAt    DateTime @default(now())
 }
 

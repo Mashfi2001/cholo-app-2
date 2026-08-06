@@ -14,6 +14,7 @@ const complaintRoutes = require("./routes/complaintRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const chatRoutes = require("./routes/chatRoutes");
 const ratingRoutes = require("./routes/ratingRoutes");
+const { requireAuth } = require("./middleware/auth");
 
 const app = express();
 
@@ -25,20 +26,27 @@ app.get("/", (req, res) => {
   res.send("Cholo backend is running");
 });
 
+// Public: login, signup, OTP and password reset must work without a session.
 app.use("/api/auth", authRoutes);
-app.use("/api/rides", rideRoutes);
-app.use("/api/ride-search", rideSearchRoutes);
-app.use("/api/fares", fareRoutes);
-app.use("/api/bookings", bookingRoutes);
-app.use("/seat-booking", seatBookingRoutes);
-app.use("/api/complaints", complaintRoutes);
-app.use("/api/notifications", notificationRoutes);
-app.use("/api/chat", chatRoutes);
-app.use("/api/verification", verificationRoutes);
+
+// Passenger and driver surface: every request needs a valid session token.
+// `requireAuth` populates req.user, so controllers can trust the caller's id.
+app.use("/api/rides", requireAuth, rideRoutes);
+app.use("/api/ride-search", requireAuth, rideSearchRoutes);
+app.use("/api/fares", requireAuth, fareRoutes);
+app.use("/api/bookings", requireAuth, bookingRoutes);
+app.use("/seat-booking", requireAuth, seatBookingRoutes);
+app.use("/api/complaints", requireAuth, complaintRoutes);
+app.use("/api/notifications", requireAuth, notificationRoutes);
+app.use("/api/chat", requireAuth, chatRoutes);
+app.use("/api/verification", requireAuth, verificationRoutes);
+app.use("/api/messages", requireAuth, messageRoutes);
+app.use("/api/ratings", requireAuth, ratingRoutes);
+
+// Left unauthenticated for now: these back the admin panel, which is outside
+// the passenger/driver session work.
 app.use("/api/admin", adminRoutes);
 app.use("/api/broadcasts", broadcastRoutes);
-app.use("/api/messages", messageRoutes);
-app.use("/api/ratings", ratingRoutes);
 
 // Global error handler for file upload and backend errors
 app.use((err, req, res, next) => {

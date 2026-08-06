@@ -183,8 +183,13 @@ class _DriverPanelState extends State<DriverPanel> {
           routeDurationMin = summary['duration'] / 60;
         });
         await _fetchFareEstimatesFromBackend();
+      } else {
+        debugPrint('Route request failed: HTTP ${response.statusCode} ${response.body}');
       }
-    } catch (_) {} finally {
+    } catch (e) {
+      // Previously swallowed silently, which hid route failures completely.
+      debugPrint('Route fetching error: $e');
+    } finally {
       setState(() => isLoading = false);
     }
   }

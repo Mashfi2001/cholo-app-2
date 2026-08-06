@@ -71,7 +71,9 @@ class AdminPanel extends StatelessWidget {
                   const SizedBox(width: 16),
                   Expanded(
                     child: _buildActionButton('Logout', Icons.logout, () {
-                      Session.userId = null;
+                      // Ends this device's session on the server; any other
+                      // device signed in to the account stays signed in.
+                      Session.logout();
                       Navigator.of(context).pushAndRemoveUntil(
                         MaterialPageRoute(
                           builder: (context) => const LoginScreen(),

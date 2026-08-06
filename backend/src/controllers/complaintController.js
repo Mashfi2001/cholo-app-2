@@ -188,11 +188,15 @@ exports.updateComplaintStatus = async (req, res) => {
 exports.sendWarning = async (req, res) => {
     const { complaintId, userId, message } = req.body;
 
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // requireAuth has already validated the session, so the caller's identity
+    // comes from the session rather than from a client-supplied id.
+    if (!req.user) {
         return res.status(401).json({ error: "Unauthorized" });
     }
-    const adminId = authHeader.split(' ')[1];
+    if (req.user.role !== 'ADMIN') {
+        return res.status(403).json({ error: "Only admins can issue warnings." });
+    }
+    const adminId = req.user.id;
 
     try {
         const warning = await prisma.warning.create({
@@ -523,8 +527,7 @@ exports.identifyPassengerBySeatAndTime = async (req, res) => {
 // ============ NEW: Get ride seat map (Privacy-focused) ============
 exports.getRideSeatMap = async (req, res) => {
     const rideId = Number(req.params.rideId);
-    const currentUserId = req.headers.authorization ?
-        Number(req.headers.authorization.split(' ')[1]) : null;
+    const currentUserId = req.user ? req.user.id : null;
 
     if (!rideId) {
         return res.status(400).json({ error: "rideId is required" });

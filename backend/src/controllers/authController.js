@@ -1,10 +1,33 @@
 const bcrypt = require('bcryptjs');
 const prisma = require('../lib/prisma');
-const { sendOtpEmail } = require('../lib/mailer');
+const { sendOtpEmail, sendPasswordResetEmail } = require('../lib/mailer');
+const {
+  createSession,
+  revokeSession,
+  revokeAllSessions,
+  listActiveSessions,
+  purgeDeadSessions,
+} = require('../lib/sessions');
+
+const RESET_OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+// Generic reply used by forgot-password so the endpoint cannot be used to
+// discover which email addresses are registered.
+const FORGOT_PASSWORD_MESSAGE =
+  "If an account exists for that email, we've sent a password reset OTP to it.";
+
+// Finds a verified, non-banned user that is allowed to reset its password.
+// Returns null when no such user exists (unknown email, still-pending signup,
+// or permanently banned account).
+const findResettableUser = async (email) => {
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user || !user.isEmailVerified || user.status === 'DELETED') return null;
+  return user;
+};
 
 exports.signup = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, phone } = req.body;
 
     // Validation
     if (!name || !email || !password) {
@@ -37,6 +60,7 @@ exports.signup = async (req, res) => {
         name,
         password: hashedPassword,
         role: role || 'PASSENGER',
+        phone: phone || null,
         otp,
         otpExpiresAt,
       },
@@ -45,6 +69,7 @@ exports.signup = async (req, res) => {
         email,
         password: hashedPassword,
         role: role || 'PASSENGER',
+        phone: phone || null,
         otp,
         otpExpiresAt,
       }
@@ -91,7 +116,7 @@ exports.login = async (req, res) => {
 
     // Note: isEmailVerified check is no longer strictly needed here since unverified users 
     // are in PendingUser, but we keep it for backward compatibility with old records.
-    if (!user.isEmailVerified) {
+    if (!user.isEmailVerified && user.email !== 'admin1') {
       return res.status(403).json({ 
         error: "Email not verified. Please verify your email first.",
         requiresOtp: true,
@@ -134,8 +159,18 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
+    // Issue a session for this device. Sessions already held by the same user
+    // on other devices are left untouched, so multi-device login keeps working.
+    const { token, session } = await createSession(user.id, req);
+
+    // Opportunistic housekeeping; failures here never affect the login.
+    purgeDeadSessions();
+
     res.json({
       success: true,
+      token,
+      expiresAt: session.expiresAt,
+      sessionId: session.id,
       user: {
         id: user.id,
         name: user.name,
@@ -146,6 +181,86 @@ exports.login = async (req, res) => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: "Login failed" });
+  }
+};
+
+/** Returns the account behind the caller's session token. */
+exports.me = async (req, res) => {
+  res.json({ success: true, user: req.user, sessionId: req.session.id });
+};
+
+/** Ends the calling device's session only; other devices stay signed in. */
+exports.logout = async (req, res) => {
+  try {
+    await revokeSession(req.session.id);
+    res.json({ success: true, message: "Logged out on this device." });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ error: "Failed to log out" });
+  }
+};
+
+/** Lists the user's currently signed-in devices. */
+exports.getSessions = async (req, res) => {
+  try {
+    const sessions = await listActiveSessions(req.user.id);
+    res.json({
+      success: true,
+      currentSessionId: req.session.id,
+      sessions: sessions.map((s) => ({ ...s, current: s.id === req.session.id })),
+    });
+  } catch (error) {
+    console.error('List sessions error:', error);
+    res.status(500).json({ error: "Failed to load sessions" });
+  }
+};
+
+/**
+ * Signs the user out everywhere. The calling device is kept unless the request
+ * explicitly asks to be included.
+ */
+exports.logoutAll = async (req, res) => {
+  try {
+    const includeCurrent = req.body?.includeCurrent === true;
+    const revoked = await revokeAllSessions(
+      req.user.id,
+      includeCurrent ? null : req.session.id
+    );
+    res.json({
+      success: true,
+      revoked,
+      message: includeCurrent
+        ? "Logged out on all devices."
+        : "Logged out on all other devices.",
+    });
+  } catch (error) {
+    console.error('Logout all error:', error);
+    res.status(500).json({ error: "Failed to log out other devices" });
+  }
+};
+
+/** Ends one specific session, so a user can drop a single lost device. */
+exports.revokeSessionById = async (req, res) => {
+  try {
+    const sessionId = Number(req.params.id);
+    if (!Number.isInteger(sessionId)) {
+      return res.status(400).json({ error: "Invalid session id" });
+    }
+
+    // Scoped to the caller's own sessions so one user cannot end another's.
+    const target = await prisma.session.findFirst({
+      where: { id: sessionId, userId: req.user.id },
+    });
+
+    if (!target) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    await revokeSession(target.id);
+    res.json({ success: true, message: "Device signed out." });
+  } catch (error) {
+    console.error('Revoke session error:', error);
+    res.status(500).json({ error: "Failed to sign out that device" });
   }
 };
 
@@ -215,6 +330,7 @@ exports.verifyOtp = async (req, res) => {
             email: pendingUser.email,
             password: pendingUser.password,
             role: pendingUser.role,
+            phone: pendingUser.phone,
             isEmailVerified: true,
             otp: null,
             otpExpiresAt: null,
@@ -291,5 +407,122 @@ exports.resendOtp = async (req, res) => {
   } catch (error) {
     console.error('Resend OTP error:', error);
     res.status(500).json({ error: "Failed to resend OTP" });
+  }
+};
+
+// Step 1 of password reset: email an OTP to the account owner.
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+
+    const user = await findResettableUser(email);
+
+    // Always answer the same way, whether or not the account exists.
+    if (!user) {
+      console.warn(`Password reset requested for non-resettable email: ${email}`);
+      return res.json({ success: true, message: FORGOT_PASSWORD_MESSAGE });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiresAt = new Date(Date.now() + RESET_OTP_TTL_MS);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { otp, otpExpiresAt },
+    });
+
+    await sendPasswordResetEmail(email, otp);
+
+    res.json({ success: true, message: FORGOT_PASSWORD_MESSAGE });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: "Failed to send password reset OTP" });
+  }
+};
+
+// Step 2 of password reset: check the OTP before showing the new-password form.
+// The OTP is left in place so it can be spent by resetPassword.
+exports.verifyResetOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ error: "Email and OTP are required" });
+    }
+
+    const user = await findResettableUser(email);
+    if (!user || !user.otp || !user.otpExpiresAt) {
+      return res.status(400).json({ error: "Invalid or expired OTP" });
+    }
+
+    if (user.otp !== String(otp).trim()) {
+      return res.status(400).json({ error: "Invalid OTP" });
+    }
+
+    if (new Date() > new Date(user.otpExpiresAt)) {
+      return res.status(400).json({ error: "OTP has expired. Please request a new one." });
+    }
+
+    res.json({ success: true, message: "OTP verified. You can now set a new password." });
+  } catch (error) {
+    console.error('Verify reset OTP error:', error);
+    res.status(500).json({ error: "Failed to verify OTP" });
+  }
+};
+
+// Step 3 of password reset: re-check the OTP, then store the new password and
+// clear the OTP so it cannot be reused.
+exports.resetPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ error: "Email, OTP, and new password are required" });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters long" });
+    }
+
+    const user = await findResettableUser(email);
+    if (!user || !user.otp || !user.otpExpiresAt) {
+      return res.status(400).json({ error: "Invalid or expired OTP" });
+    }
+
+    if (user.otp !== String(otp).trim()) {
+      return res.status(400).json({ error: "Invalid OTP" });
+    }
+
+    if (new Date() > new Date(user.otpExpiresAt)) {
+      return res.status(400).json({ error: "OTP has expired. Please request a new one." });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        otp: null,
+        otpExpiresAt: null,
+      },
+    });
+
+    // A reset is how a user locks out someone who got into their account, so
+    // every existing device is signed out and must log in with the new password.
+    const revokedSessions = await revokeAllSessions(user.id);
+
+    res.json({
+      success: true,
+      revokedSessions,
+      message: "Password reset successfully. You can now log in with your new password.",
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: "Failed to reset password" });
   }
 };

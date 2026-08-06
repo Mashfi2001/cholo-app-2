@@ -647,17 +647,34 @@ exports.getPassengerRideHistory = async (req, res) => {
     // Group bookings by ride to avoid duplicates if user booked multiple seats
     const rideMap = new Map();
     for (const b of bookings) {
-      if (!rideMap.has(b.rideId)) {
+      const seatFare = Math.ceil(Number(b.fare) || 0);
+      const existing = rideMap.get(b.rideId);
+
+      if (!existing) {
         rideMap.set(b.rideId, {
           ...b.ride,
           status: b.ride.status,
           bookedAt: b.createdAt,
           paidAt: b.paidAt,
+          seatNos: [b.seatNo],
+          // What this passenger was charged for their own seats. `totalFare`
+          // on the ride is a running unpaid balance that drops to 0 once
+          // everyone has paid, so it cannot be used to show a past fare.
+          fare: seatFare,
         });
+      } else {
+        existing.seatNos.push(b.seatNo);
+        existing.fare += seatFare;
+        if (!existing.paidAt && b.paidAt) existing.paidAt = b.paidAt;
       }
     }
 
-    return res.json({ rides: Array.from(rideMap.values()) });
+    const rides = Array.from(rideMap.values()).map((ride) => ({
+      ...ride,
+      seatNos: ride.seatNos.sort((a, b) => a - b),
+    }));
+
+    return res.json({ rides });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Internal server error" });

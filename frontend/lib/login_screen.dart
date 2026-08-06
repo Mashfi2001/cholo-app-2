@@ -21,13 +21,26 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _resetEmailController = TextEditingController();
+  final TextEditingController _resetOtpController = TextEditingController();
+  final TextEditingController _newPasswordController = TextEditingController();
+  final TextEditingController _confirmNewPasswordController = TextEditingController();
   bool _isLoading = false;
   bool _showSignup = false;
   bool _showOtpVerification = false;
+  bool _obscurePassword = true;
   String _otpEmail = '';
   String _errorMessage = '';
   String _selectedRole = 'PASSENGER'; // Default role
   final TextEditingController _otpController = TextEditingController();
+
+  // Forgot password flow: 0 = off, 1 = enter email, 2 = enter OTP, 3 = new password
+  int _forgotStep = 0;
+  String _resetEmail = '';
+  String _resetOtp = '';
+  String _infoMessage = '';
 
   final Color brandOrange = const Color(0xFFF98825);
   final Color darkText = const Color(0xFF2C323A);
@@ -37,7 +50,13 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
+    _phoneController.dispose();
+    _confirmPasswordController.dispose();
     _otpController.dispose();
+    _resetEmailController.dispose();
+    _resetOtpController.dispose();
+    _newPasswordController.dispose();
+    _confirmNewPasswordController.dispose();
     super.dispose();
   }
 
@@ -63,7 +82,18 @@ class _LoginScreenState extends State<LoginScreen> {
         final dynamic rawId = user['id'];
         final int userId =
             rawId is int ? rawId : int.parse(rawId.toString());
-        Session.userId = userId;
+
+        // Start the session for this device. The backend keeps any sessions
+        // this account holds on other devices alive alongside it.
+        Session.start(
+          id: userId,
+          email: user['email'] ?? _emailController.text.trim(),
+          sessionToken: data['token'] as String?,
+          expiry: data['expiresAt'] != null
+              ? DateTime.tryParse(data['expiresAt'])
+              : null,
+        );
+
         final String userName = user['name'] ?? 'User';
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -200,6 +230,13 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _signup() async {
+    if (_passwordController.text != _confirmPasswordController.text) {
+      setState(() {
+        _errorMessage = 'Passwords do not match';
+      });
+      return;
+    }
+
     setState(() {
       _errorMessage = '';
       _isLoading = true;
@@ -214,6 +251,7 @@ class _LoginScreenState extends State<LoginScreen> {
           'email': _emailController.text,
           'password': _passwordController.text,
           'role': _selectedRole,
+          'phone': _phoneController.text.trim().isNotEmpty ? _phoneController.text.trim() : null,
         }),
       );
 
@@ -332,6 +370,195 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _openForgotPassword() {
+    setState(() {
+      _forgotStep = 1;
+      _errorMessage = '';
+      _infoMessage = '';
+      _resetEmail = _emailController.text.trim();
+      _resetEmailController.text = _resetEmail;
+      _resetOtp = '';
+      _resetOtpController.clear();
+      _newPasswordController.clear();
+      _confirmNewPasswordController.clear();
+    });
+  }
+
+  void _closeForgotPassword() {
+    setState(() {
+      _forgotStep = 0;
+      _errorMessage = '';
+      _infoMessage = '';
+      _resetOtp = '';
+      _resetOtpController.clear();
+      _newPasswordController.clear();
+      _confirmNewPasswordController.clear();
+    });
+  }
+
+  // Step 1: ask the backend to email a reset OTP.
+  Future<void> _sendResetOtp() async {
+    final email = _resetEmailController.text.trim();
+    if (email.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter your email address';
+      });
+      return;
+    }
+
+    setState(() {
+      _errorMessage = '';
+      _infoMessage = '';
+      _isLoading = true;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse('$backendUrl/api/auth/forgot-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _resetEmail = email;
+          _forgotStep = 2;
+          _infoMessage = data['message'] ??
+              'If an account exists for that email, we\'ve sent a password reset OTP to it.';
+        });
+      } else {
+        final error = jsonDecode(response.body);
+        setState(() {
+          _errorMessage = error['error'] ?? 'Failed to send reset OTP';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Connection error: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // Step 2: confirm the OTP before showing the new-password form.
+  Future<void> _verifyResetOtp() async {
+    final otp = _resetOtpController.text.trim();
+    if (otp.length != 6) {
+      setState(() {
+        _errorMessage = 'Please enter the 6-digit OTP';
+      });
+      return;
+    }
+
+    setState(() {
+      _errorMessage = '';
+      _infoMessage = '';
+      _isLoading = true;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse('$backendUrl/api/auth/verify-reset-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': _resetEmail, 'otp': otp}),
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          _resetOtp = otp;
+          _forgotStep = 3;
+          _infoMessage = 'OTP confirmed. Please choose a new password.';
+        });
+      } else {
+        final error = jsonDecode(response.body);
+        setState(() {
+          _errorMessage = error['error'] ?? 'OTP verification failed';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Connection error: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // Step 3: send the confirmed OTP together with the new password.
+  Future<void> _resetPassword() async {
+    final newPassword = _newPasswordController.text;
+
+    if (newPassword.length < 6) {
+      setState(() {
+        _errorMessage = 'Password must be at least 6 characters long';
+      });
+      return;
+    }
+
+    if (newPassword != _confirmNewPasswordController.text) {
+      setState(() {
+        _errorMessage = 'Passwords do not match';
+      });
+      return;
+    }
+
+    setState(() {
+      _errorMessage = '';
+      _infoMessage = '';
+      _isLoading = true;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse('$backendUrl/api/auth/reset-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': _resetEmail,
+          'otp': _resetOtp,
+          'newPassword': newPassword,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ??
+                'Password reset successfully. Please log in.'),
+          ),
+        );
+        _emailController.text = _resetEmail;
+        _passwordController.clear();
+        _closeForgotPassword();
+      } else {
+        final error = jsonDecode(response.body);
+        setState(() {
+          _errorMessage = error['error'] ?? 'Failed to reset password';
+          // A rejected OTP means the confirmed code is no longer usable.
+          if (response.statusCode == 400) {
+            _forgotStep = 2;
+            _resetOtp = '';
+          }
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Connection error: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -346,6 +573,9 @@ class _LoginScreenState extends State<LoginScreen> {
               Image.asset('assets/cholo_logo.png', height: 120),
               const SizedBox(height: 40),
 
+              if (_forgotStep != 0)
+                _buildForgotPasswordView()
+              else ...[
               // Title
               if (!_showOtpVerification)
                 Text(
@@ -417,9 +647,20 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: _passwordController,
                   enabled: !_isLoading,
-                  obscureText: true,
+                  obscureText: _obscurePassword,
                   decoration: InputDecoration(
                     prefixIcon: Icon(Icons.lock_outline, color: brandOrange),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        color: Colors.orange.shade300,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
                     hintText: 'Password',
                     hintStyle: TextStyle(color: Colors.orange.shade300),
                     enabledBorder: OutlineInputBorder(
@@ -434,6 +675,54 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               if (!_showOtpVerification)
+                const SizedBox(height: 16),
+
+              // Confirm Password Field (only for signup)
+              if (_showSignup && !_showOtpVerification)
+                TextField(
+                  controller: _confirmPasswordController,
+                  enabled: !_isLoading,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
+                    prefixIcon: Icon(Icons.lock_outline, color: brandOrange),
+                    hintText: 'Confirm Password',
+                    hintStyle: TextStyle(color: Colors.orange.shade300),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide(color: brandOrange, width: 1.5),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide(color: brandOrange, width: 2.0),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              if (_showSignup && !_showOtpVerification)
+                const SizedBox(height: 16),
+
+              // Phone Field (only for signup)
+              if (_showSignup && !_showOtpVerification)
+                TextField(
+                  controller: _phoneController,
+                  enabled: !_isLoading,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    prefixIcon: Icon(Icons.phone_outlined, color: brandOrange),
+                    hintText: 'Mobile Number',
+                    hintStyle: TextStyle(color: Colors.orange.shade300),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide(color: brandOrange, width: 1.5),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide(color: brandOrange, width: 2.0),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              if (_showSignup && !_showOtpVerification)
                 const SizedBox(height: 16),
 
               // Role Selection (only for signup)
@@ -479,7 +768,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           value: 'DRIVER',
                           child: Text('Driver'),
                         ),
-                        DropdownMenuItem(value: 'ADMIN', child: Text('Admin')),
                       ],
                       onChanged: (value) {
                         setState(() {
@@ -512,11 +800,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: _isLoading
-                        ? null
-                        : () {
-                            // Handle forgot password routing
-                          },
+                    onPressed: _isLoading ? null : _openForgotPassword,
                     child: Text(
                       'Forgot Password?',
                       style: TextStyle(
@@ -581,7 +865,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 _errorMessage = '';
                                 _emailController.clear();
                                 _passwordController.clear();
+                                _confirmPasswordController.clear();
                                 _nameController.clear();
+                                _phoneController.clear();
                                 _selectedRole = 'PASSENGER'; // Reset to default
                               });
                             },
@@ -596,10 +882,225 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ],
                 ),
+              ],
             ],
           ),
         ),
       ),
+    );
+  }
+
+  InputDecoration _roundedDecoration({
+    required IconData icon,
+    required String hint,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      prefixIcon: Icon(icon, color: brandOrange),
+      suffixIcon: suffixIcon,
+      hintText: hint,
+      hintStyle: TextStyle(color: Colors.orange.shade300),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(30),
+        borderSide: BorderSide(color: brandOrange, width: 1.5),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(30),
+        borderSide: BorderSide(color: brandOrange, width: 2.0),
+      ),
+      contentPadding: const EdgeInsets.symmetric(vertical: 16),
+    );
+  }
+
+  Widget _primaryButton(String label, VoidCallback? onPressed) {
+    return ElevatedButton(
+      onPressed: _isLoading ? null : onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: brandOrange,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(30),
+        ),
+        elevation: 0,
+      ),
+      child: _isLoading
+          ? const SizedBox(
+              height: 24,
+              width: 24,
+              child: CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 2,
+              ),
+            )
+          : Text(
+              label,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+    );
+  }
+
+  Widget _buildForgotPasswordView() {
+    final String title = _forgotStep == 1
+        ? 'Forgot Password'
+        : _forgotStep == 2
+            ? 'Enter OTP'
+            : 'New Password';
+
+    final String subtitle = _forgotStep == 1
+        ? 'Enter the email address linked to your account and we will send you a 6-digit OTP.'
+        : _forgotStep == 2
+            ? 'Enter the 6-digit OTP sent to\n$_resetEmail'
+            : 'Choose a new password for\n$_resetEmail';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: darkText,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          subtitle,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 15, color: Colors.grey),
+        ),
+        const SizedBox(height: 28),
+
+        // Step 1: email entry
+        if (_forgotStep == 1)
+          TextField(
+            controller: _resetEmailController,
+            enabled: !_isLoading,
+            keyboardType: TextInputType.emailAddress,
+            decoration: _roundedDecoration(
+              icon: Icons.email_outlined,
+              hint: 'Email',
+            ),
+          ),
+
+        // Step 2: OTP entry
+        if (_forgotStep == 2)
+          TextField(
+            controller: _resetOtpController,
+            enabled: !_isLoading,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            maxLength: 6,
+            style: const TextStyle(fontSize: 24, letterSpacing: 8),
+            decoration: InputDecoration(
+              hintText: '000000',
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: BorderSide(color: brandOrange, width: 1.5),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: BorderSide(color: brandOrange, width: 2.0),
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 16),
+              counterText: '',
+            ),
+          ),
+
+        // Step 3: new password entry
+        if (_forgotStep == 3) ...[
+          TextField(
+            controller: _newPasswordController,
+            enabled: !_isLoading,
+            obscureText: _obscurePassword,
+            decoration: _roundedDecoration(
+              icon: Icons.lock_outline,
+              hint: 'New Password',
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                  color: Colors.orange.shade300,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _confirmNewPasswordController,
+            enabled: !_isLoading,
+            obscureText: _obscurePassword,
+            decoration: _roundedDecoration(
+              icon: Icons.lock_outline,
+              hint: 'Confirm New Password',
+            ),
+          ),
+        ],
+
+        const SizedBox(height: 20),
+
+        if (_infoMessage.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _infoMessage,
+                style: TextStyle(color: darkText),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+
+        if (_errorMessage.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _errorMessage,
+                style: TextStyle(color: Colors.red.shade900),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+
+        if (_forgotStep == 1) _primaryButton('Send OTP', _sendResetOtp),
+        if (_forgotStep == 2) _primaryButton('Verify OTP', _verifyResetOtp),
+        if (_forgotStep == 3) _primaryButton('Reset Password', _resetPassword),
+
+        // Let the user request a fresh OTP if the first one expired or got lost.
+        if (_forgotStep == 2)
+          TextButton(
+            onPressed: _isLoading ? null : _sendResetOtp,
+            child: Text(
+              'Resend OTP',
+              style: TextStyle(color: brandOrange, fontWeight: FontWeight.bold),
+            ),
+          ),
+
+        TextButton(
+          onPressed: _isLoading ? null : _closeForgotPassword,
+          child: const Text(
+            'Back to Login',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      ],
     );
   }
 

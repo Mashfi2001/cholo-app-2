@@ -4,9 +4,15 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'session.dart';
 
 void main() {
-  runApp(const MyApp());
+  // Installs a client that attaches the session token to every request made
+  // through the `http` helpers, so individual screens don't have to.
+  http.runWithClient(
+    () => runApp(const MyApp()),
+    () => AuthHttpClient(http.Client()),
+  );
 }
 
 class MyApp extends StatelessWidget {

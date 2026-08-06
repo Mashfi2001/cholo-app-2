@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'session.dart';
@@ -43,7 +43,7 @@ class _PassengerRideDetailsState extends State<PassengerRideDetails> {
     try {
       final response = await http.get(
         Uri.parse('$backendUrl/seat-booking/${widget.ride['id']}/seats'),
-        headers: {'Authorization': 'Bearer ${Session.userId}'},
+        headers: {'Authorization': 'Bearer ${Session.token}'},
       );
 
       print('Fetch ride details status: ${response.statusCode}');
@@ -199,7 +199,7 @@ class _PassengerRideDetailsState extends State<PassengerRideDetails> {
         Uri.parse('$backendUrl/api/complaints/identify-passenger'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${Session.userId}',
+          'Authorization': 'Bearer ${Session.token}',
         },
         body: jsonEncode({
           'rideId': widget.ride['id'],
@@ -221,7 +221,7 @@ class _PassengerRideDetailsState extends State<PassengerRideDetails> {
         Uri.parse('$backendUrl/api/complaints/passenger-to-passenger'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${Session.userId}',
+          'Authorization': 'Bearer ${Session.token}',
         },
         body: jsonEncode({
           'complainantId': Session.userId,
@@ -585,7 +585,7 @@ class _PassengerRideDetailsState extends State<PassengerRideDetails> {
         Uri.parse('$backendUrl/api/complaints/identify-passenger-by-time'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${Session.userId}',
+          'Authorization': 'Bearer ${Session.token}',
         },
         body: jsonEncode({
           'rideId': widget.ride['id'],
@@ -609,7 +609,7 @@ class _PassengerRideDetailsState extends State<PassengerRideDetails> {
         Uri.parse('$backendUrl/api/complaints/passenger-to-passenger'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${Session.userId}',
+          'Authorization': 'Bearer ${Session.token}',
         },
         body: jsonEncode({
           'complainantId': Session.userId,
@@ -779,7 +779,7 @@ class _PassengerRideDetailsState extends State<PassengerRideDetails> {
         Uri.parse('$backendUrl/api/complaints/passenger-to-driver'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${Session.userId}',
+          'Authorization': 'Bearer ${Session.token}',
         },
         body: jsonEncode({
           'passengerId': Session.userId,
@@ -844,7 +844,7 @@ class _PassengerRideDetailsState extends State<PassengerRideDetails> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${widget.ride['origin']} → ${widget.ride['destination']}',
+                            '${widget.ride['origin']} â†’ ${widget.ride['destination']}',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -855,7 +855,10 @@ class _PassengerRideDetailsState extends State<PassengerRideDetails> {
                           _infoRow(Icons.access_time, 'Time', widget.ride['departureTime']?.toString().substring(11, 16) ?? 'N/A'),
                           _infoRow(Icons.route, 'Distance', '${widget.ride['routeDistanceKm'] ?? '?'} km'),
                           _infoRow(Icons.timer, 'Duration', '${widget.ride['routeDurationMin'] ?? '?'} min'),
-                          _infoRow(Icons.attach_money, 'Fare', '${widget.ride['totalFare'] ?? '?'} Taka'),
+                          // `fare` is this passenger's own charge; `totalFare`
+                          // is the ride's unpaid balance, which is 0 once paid.
+                          _infoRow(Icons.attach_money, 'Fare',
+                              '${widget.ride['fare'] ?? widget.ride['totalFare'] ?? '?'} Taka'),
                           if (mySeatNumber != null)
                             _infoRow(Icons.event_seat, 'Your Seat', 'Seat $mySeatNumber'),
                         ],

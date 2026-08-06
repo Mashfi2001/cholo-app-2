@@ -167,7 +167,10 @@ class _PassengerRidesListState extends State<PassengerRidesList> {
                   Icon(Icons.attach_money, size: 14, color: Colors.grey.shade600),
                   const SizedBox(width: 4),
                   Text(
-                    'Fare: ${ride['totalFare'] ?? 0} Taka',
+                    // `fare` is what this passenger paid for their own seats.
+                    // `totalFare` is the ride's unpaid balance and reads 0
+                    // once everyone has settled up.
+                    'Fare: ${ride['fare'] ?? ride['totalFare'] ?? 0} Taka',
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: brandOrange),
                   ),
                 ],

@@ -36,3 +36,29 @@ exports.sendOtpEmail = async (to, otp) => {
     return false;
   }
 };
+
+exports.sendPasswordResetEmail = async (to, otp) => {
+  try {
+    const info = await transporter.sendMail({
+      from: `"Cholo App" <${process.env.SMTP_FROM}>`,
+      to,
+      subject: "Reset Your Cholo App Password",
+      text: `Your OTP to reset your Cholo App password is: ${otp}. It will expire in 10 minutes. If you did not request a password reset, please ignore this email.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Password Reset Request</h2>
+          <p>We received a request to reset the password for your Cholo App account. Use the OTP below to continue. This OTP is valid for 10 minutes.</p>
+          <div style="background-color: #f4f4f4; padding: 15px; text-align: center; border-radius: 5px;">
+            <h1 style="letter-spacing: 5px; color: #F98825; margin: 0;">${otp}</h1>
+          </div>
+          <p>If you did not request a password reset, please ignore this email. Your password will remain unchanged.</p>
+        </div>
+      `,
+    });
+    console.log("Password reset email sent: %s", info.messageId);
+    return true;
+  } catch (error) {
+    console.error("Error sending password reset email: ", error);
+    return false;
+  }
+};

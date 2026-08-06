@@ -11,6 +11,7 @@ import 'backend_config.dart';
 import 'passenger_rides_list.dart';
 import 'SeatSelectionPage.dart';
 import 'ride_details_page.dart';
+import 'user_profile_page.dart';
 
 
 class UserPanel extends StatefulWidget {
@@ -337,7 +338,20 @@ class _UserPanelState extends State<UserPanel> {
                           child: _buildActionButton(
                             'Profile',
                             Icons.person,
-                            () {},
+                            () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => UserProfilePage(
+                                    user: {
+                                      'id': widget.userId,
+                                      'name': widget.userName,
+                                      'email': Session.userEmail ?? '—',
+                                      'role': 'PASSENGER',
+                                    },
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -346,7 +360,9 @@ class _UserPanelState extends State<UserPanel> {
                             'Logout',
                             Icons.logout,
                             () {
-                              Session.userId = null;
+                              // Ends this device's session on the server; other
+                              // devices on the account stay signed in.
+                              Session.logout();
                               Navigator.of(context).pushAndRemoveUntil(
                                 MaterialPageRoute(
                                   builder: (context) => const LoginScreen(),

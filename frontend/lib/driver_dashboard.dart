@@ -210,7 +210,9 @@ class _DriverDashboardState extends State<DriverDashboard> {
                           'Logout',
                           Icons.logout,
                           () {
-                            Session.userId = null;
+                            // Ends this device's session on the server; other
+                            // devices on the account stay signed in.
+                            Session.logout();
                             Navigator.of(context).pushAndRemoveUntil(
                               MaterialPageRoute(
                                   builder: (context) => const LoginScreen()),

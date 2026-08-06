@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'session.dart';
@@ -54,11 +54,11 @@ class _ComplaintDetailsPageState extends State<ComplaintDetailsPage> {
   String getComplaintTypeText() {
     switch (widget.complaint['type']) {
       case 'DRIVER_COMPLAINT':
-        return 'Driver → Passenger';
+        return 'Driver â†’ Passenger';
       case 'PASSENGER_TO_DRIVER':
-        return 'Passenger → Driver';
+        return 'Passenger â†’ Driver';
       case 'PASSENGER_TO_PASSENGER':
-        return 'Passenger → Passenger';
+        return 'Passenger â†’ Passenger';
       default:
         return widget.complaint['type'] ?? 'Unknown';
     }
@@ -134,7 +134,7 @@ class _ComplaintDetailsPageState extends State<ComplaintDetailsPage> {
         Uri.parse('$backendUrl/api/complaints/warnings'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${Session.userId}',
+          'Authorization': 'Bearer ${Session.token}',
         },
         body: jsonEncode({
           'complaintId': widget.complaint['id'],
@@ -178,7 +178,7 @@ class _ComplaintDetailsPageState extends State<ComplaintDetailsPage> {
         Uri.parse('$backendUrl/api/complaints/${widget.complaint['id']}/status'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${Session.userId}',
+          'Authorization': 'Bearer ${Session.token}',
         },
         body: jsonEncode({'status': status}),
       );
@@ -443,7 +443,7 @@ class _ComplaintDetailsPageState extends State<ComplaintDetailsPage> {
 
             // Ride Info
             _buildSection('Ride Information', [
-              _buildInfoRow('Route', '${complaint['ride']?['origin'] ?? 'N/A'} → ${complaint['ride']?['destination'] ?? 'N/A'}'),
+              _buildInfoRow('Route', '${complaint['ride']?['origin'] ?? 'N/A'} â†’ ${complaint['ride']?['destination'] ?? 'N/A'}'),
               _buildInfoRow('Date', complaint['ride']?['departureTime']?.toString().substring(0, 10) ?? 'N/A'),
             ]),
             const SizedBox(height: 16),
