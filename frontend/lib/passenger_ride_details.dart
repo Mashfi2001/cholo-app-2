@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'session.dart';
@@ -854,7 +854,7 @@ class _PassengerRideDetailsState extends State<PassengerRideDetails> {
                           _infoRow(Icons.calendar_today, 'Date', widget.ride['departureTime']?.toString().substring(0, 10) ?? 'N/A'),
                           _infoRow(Icons.access_time, 'Time', widget.ride['departureTime']?.toString().substring(11, 16) ?? 'N/A'),
                           _infoRow(Icons.route, 'Distance', '${widget.ride['routeDistanceKm'] ?? '?'} km'),
-                          _infoRow(Icons.timer, 'Duration', '${widget.ride['routeDurationMin'] ?? '?'} min'),
+                          _infoRow(Icons.timer, 'Duration', '${widget.ride['routeDurationMin'] != null ? (double.tryParse(widget.ride['routeDurationMin'].toString())?.round() ?? '?') : '?'} min'),
                           // `fare` is this passenger's own charge; `totalFare`
                           // is the ride's unpaid balance, which is 0 once paid.
                           _infoRow(Icons.attach_money, 'Fare',

@@ -27,11 +27,95 @@ class DriverDashboard extends StatefulWidget {
 class _DriverDashboardState extends State<DriverDashboard> {
   Map<String, dynamic>? activeRide;
   bool isLoading = true;
+  List<dynamic> notifications = [];
 
   @override
   void initState() {
     super.initState();
-    _fetchActiveRide();
+    fetchData();
+  }
+
+  Future<void> fetchData() async {
+    setState(() => isLoading = true);
+    await Future.wait([
+      _fetchActiveRide(),
+      _fetchNotifications(),
+    ]);
+    if (mounted) setState(() => isLoading = false);
+  }
+
+  Future<void> _fetchNotifications() async {
+    try {
+      final notifRes = await http.get(
+        Uri.parse('$backendUrl/api/notifications/user/${widget.userId}'),
+      );
+      if (notifRes.statusCode == 200) {
+        final notifBody = jsonDecode(notifRes.body);
+        setState(() {
+          notifications = List<dynamic>.from(notifBody['notifications'] ?? []);
+        });
+      }
+    } catch (e) {
+      print('Error fetching notifications: $e');
+    }
+  }
+
+  Future<void> deleteNotification(int id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$backendUrl/api/notifications/$id'),
+      );
+      if (response.statusCode == 200) {
+        setState(() {
+          notifications.removeWhere((n) => n['id'] == id);
+        });
+      }
+    } catch (e) {
+      print('Error deleting notification: $e');
+    }
+  }
+
+  void _showNotifications() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Notifications'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: notifications.isEmpty
+              ? const Center(child: Text('No notifications'))
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: notifications.length,
+                  itemBuilder: (context, index) {
+                    final n = notifications[index];
+                    return ListTile(
+                      leading: Icon(
+                        n['type'] == 'WARNING' ? Icons.warning : 
+                        n['type'] == 'SUCCESS' ? Icons.check_circle : Icons.info,
+                        color: n['type'] == 'WARNING' ? Colors.orange : 
+                               n['type'] == 'SUCCESS' ? Colors.green : Colors.blue,
+                      ),
+                      title: Text(n['title'], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                      subtitle: Text(n['message'], style: const TextStyle(fontSize: 12)),
+                      contentPadding: EdgeInsets.zero,
+                      trailing: IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () {
+                          deleteNotification(n['id']);
+                          Navigator.pop(context);
+                          _showNotifications();
+                        },
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
   }
 
   Future<void> _fetchActiveRide() async {
@@ -48,8 +132,6 @@ class _DriverDashboardState extends State<DriverDashboard> {
       }
     } catch (e) {
       print('Error fetching active ride: $e');
-    } finally {
-      if (mounted) setState(() => isLoading = false);
     }
   }
 
@@ -70,9 +152,28 @@ class _DriverDashboardState extends State<DriverDashboard> {
         elevation: 0,
         centerTitle: true,
         actions: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications, color: Colors.white),
+                onPressed: _showNotifications,
+              ),
+              if (notifications.any((n) => n['isRead'] == false))
+                Positioned(
+                  right: 12,
+                  top: 12,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(6)),
+                    constraints: const BoxConstraints(minWidth: 12, minHeight: 12),
+                  ),
+                ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _fetchActiveRide,
+            onPressed: fetchData,
           ),
         ],
       ),
@@ -106,7 +207,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Row 1: Create Ride / Current Ride & File Complaint
+                  // Row 1: Create Ride / Current Ride & My Rides
                   Row(
                     children: [
                       Expanded(
@@ -124,7 +225,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
                                       ),
                                     ),
                                   )
-                                      .then((_) => _fetchActiveRide());
+                                      .then((_) => fetchData());
                                 },
                               )
                             : _buildActionButton(
@@ -140,19 +241,12 @@ class _DriverDashboardState extends State<DriverDashboard> {
                                       ),
                                     ),
                                   )
-                                      .then((_) => _fetchActiveRide());
+                                      .then((_) => fetchData());
                                 },
                                 color: Colors.green,
                               ),
                       ),
                       const SizedBox(width: 16),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Row 2: My Rides & Verify Profile
-                  Row(
-                    children: [
                       Expanded(
                         child: _buildActionButton(
                           'My Rides',
@@ -161,6 +255,28 @@ class _DriverDashboardState extends State<DriverDashboard> {
                             Navigator.of(context).push(
                               MaterialPageRoute(
                                   builder: (_) => const MyRidesPageDriver()),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Row 2: Profile & Verify Profile
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildActionButton(
+                          'Profile',
+                          Icons.person_outline,
+                          () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => DriverProfilePage(
+                                  userId: widget.userId,
+                                ),
+                              ),
                             );
                           },
                         ),
@@ -191,17 +307,9 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     children: [
                       Expanded(
                         child: _buildActionButton(
-                          'Profile',
-                          Icons.person_outline,
-                          () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => DriverProfilePage(
-                                  userId: widget.userId,
-                                ),
-                              ),
-                            );
-                          },
+                          'Support',
+                          Icons.help,
+                          () {},
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -210,8 +318,6 @@ class _DriverDashboardState extends State<DriverDashboard> {
                           'Logout',
                           Icons.logout,
                           () {
-                            // Ends this device's session on the server; other
-                            // devices on the account stay signed in.
                             Session.logout();
                             Navigator.of(context).pushAndRemoveUntil(
                               MaterialPageRoute(

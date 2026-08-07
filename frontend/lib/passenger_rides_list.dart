@@ -156,7 +156,7 @@ class _PassengerRidesListState extends State<PassengerRidesList> {
                   Icon(Icons.access_time, size: 14, color: Colors.grey.shade600),
                   const SizedBox(width: 4),
                   Text(
-                    '${ride['routeDurationMin'] ?? '?'} min',
+                    '${ride['routeDurationMin'] != null ? (double.tryParse(ride['routeDurationMin'].toString())?.round() ?? '?') : '?'} min',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ],

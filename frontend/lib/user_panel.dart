@@ -330,7 +330,6 @@ class _UserPanelState extends State<UserPanel> {
                         ),
                       ],
                     ),
-
                     const SizedBox(height: 16),
                     Row(
                       children: [
@@ -357,17 +356,16 @@ class _UserPanelState extends State<UserPanel> {
                         const SizedBox(width: 16),
                         Expanded(
                           child: _buildActionButton(
-                            'Logout',
-                            Icons.logout,
+                            'Verify Profile',
+                            Icons.verified_user,
                             () {
-                              // Ends this device's session on the server; other
-                              // devices on the account stay signed in.
-                              Session.logout();
-                              Navigator.of(context).pushAndRemoveUntil(
+                              Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (context) => const LoginScreen(),
+                                  builder: (context) => VerificationRequestPage(
+                                    userId: widget.userId,
+                                    userName: widget.userName,
+                                  ),
                                 ),
-                                (route) => false,
                               );
                             },
                           ),
@@ -379,27 +377,25 @@ class _UserPanelState extends State<UserPanel> {
                       children: [
                         Expanded(
                           child: _buildActionButton(
-                            'Verify Profile',
-                            Icons.verified_user,
-                            () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      VerificationRequestPage(
-                                    userId: widget.userId,
-                                    userName: widget.userName,
-                                  ),
-                                ),
-                              );
-                            },
+                            'Support',
+                            Icons.help,
+                            () {},
                           ),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
                           child: _buildActionButton(
-                            'Support',
-                            Icons.help,
-                            () {},
+                            'Logout',
+                            Icons.logout,
+                            () {
+                              Session.logout();
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                  builder: (context) => const LoginScreen(),
+                                ),
+                                (route) => false,
+                              );
+                            },
                           ),
                         ),
                       ],

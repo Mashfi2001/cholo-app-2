@@ -13,7 +13,7 @@ class BroadcastBanner extends StatefulWidget {
 class _BroadcastBannerState extends State<BroadcastBanner> {
   List<dynamic> broadcasts = [];
   bool isLoading = true;
-  final Set<int> _dismissedIds = {};
+  static final Set<int> _dismissedIds = {};
 
   @override
   void initState() {

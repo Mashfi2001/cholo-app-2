@@ -183,8 +183,9 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
             ? "Seat request sent for ${bookedNow.join(", ")} — $paidInt Taka (awaiting driver approval)"
             : "Seat request sent for ${bookedNow.join(", ")} (awaiting driver approval)";
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-        setState(() => selectedSeats.clear());
-        await fetchSeats();
+        if (mounted) {
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(body["error"]?.toString() ?? "Booking failed")));
@@ -482,14 +483,20 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                if (mounted) {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                }
+              },
               child: const Text("Skip for now"),
             ),
             ElevatedButton(
               onPressed: () async {
                 final driverId = rideDetails?['driver']?['id'];
                 if (driverId == null) {
-                  Navigator.pop(context);
+                  if (mounted) {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  }
                   return;
                 }
 
@@ -508,7 +515,9 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
                 } catch (e) {
                   debugPrint("Error submitting rating: $e");
                 }
-                Navigator.pop(context);
+                if (mounted) {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                }
               },
               child: const Text("Submit"),
             ),
@@ -1125,55 +1134,100 @@ class _SeatSelectionPageState extends State<SeatSelectionPage> {
 
   void _showComplaintDialog() {
     final TextEditingController complaintController = TextEditingController();
+    String selectedSeverity = 'MEDIUM';
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('File Complaint against ${rideDetails?['driver']?['name'] ?? 'Driver'}'),
-        content: TextField(
-          controller: complaintController,
-          maxLines: 3,
-          decoration: const InputDecoration(
-            labelText: 'Complaint Details',
-            hintText: 'Describe what happened...',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (complaintController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please describe the complaint')),
-                );
-                return;
-              }
-              Navigator.pop(context);
-              await _submitComplaint(complaintController.text);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Submit Complaint', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            title: Text('File Complaint against ${rideDetails?['driver']?['name'] ?? 'Driver'}'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: complaintController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Complaint Details',
+                    hintText: 'Describe what happened...',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Severity:', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Low'),
+                      selected: selectedSeverity == 'LOW',
+                      selectedColor: Colors.yellow.shade200,
+                      onSelected: (selected) {
+                        if (selected) setStateDialog(() => selectedSeverity = 'LOW');
+                      },
+                    ),
+                    ChoiceChip(
+                      label: const Text('Medium'),
+                      selected: selectedSeverity == 'MEDIUM',
+                      selectedColor: Colors.orange.shade200,
+                      onSelected: (selected) {
+                        if (selected) setStateDialog(() => selectedSeverity = 'MEDIUM');
+                      },
+                    ),
+                    ChoiceChip(
+                      label: const Text('High'),
+                      selected: selectedSeverity == 'HIGH',
+                      selectedColor: Colors.red.shade200,
+                      onSelected: (selected) {
+                        if (selected) setStateDialog(() => selectedSeverity = 'HIGH');
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (complaintController.text.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please describe the complaint')),
+                    );
+                    return;
+                  }
+                  Navigator.pop(context);
+                  await _submitComplaint(complaintController.text, selectedSeverity);
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                child: const Text('Submit Complaint', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Future<void> _submitComplaint(String description) async {
+  Future<void> _submitComplaint(String description, String severity) async {
     setState(() => _isSubmittingComplaint = true);
     try {
       final response = await http.post(
-        Uri.parse('$backendUrl/api/complaints'),
+        Uri.parse('$backendUrl/api/complaints/passenger-to-driver'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'complainantId': Session.userId,
+          'passengerId': Session.userId,
           'driverId': rideDetails?['driverId'],
           'rideId': widget.rideId,
           'description': description,
-          'title': 'Complaint from Passenger',
-          'type': 'DRIVER_COMPLAINT',
+          'severity': severity,
         }),
       );
 

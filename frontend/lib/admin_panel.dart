@@ -36,56 +36,7 @@ class AdminPanel extends StatelessWidget {
               Image.asset('assets/cholo_logo.png', height: 80),
               const SizedBox(height: 40),
 
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildActionButton('Add User', Icons.person_add, () {
-                      // TODO: Add user functionality
-                    }),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildActionButton('Broadcasts', Icons.campaign, () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const BroadcastMessagesPage(),
-                        ),
-                      );
-                    }),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildActionButton('Manage Complaints', Icons.analytics, () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const ComplaintsPage()),
-                      );
-                    }),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildActionButton('Logout', Icons.logout, () {
-                      // Ends this device's session on the server; any other
-                      // device signed in to the account stays signed in.
-                      Session.logout();
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(
-                          builder: (context) => const LoginScreen(),
-                        ),
-                        (route) => false,
-                      );
-                    }),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
+              // Row 1: User List & Driver List
               Row(
                 children: [
                   Expanded(
@@ -113,10 +64,25 @@ class AdminPanel extends StatelessWidget {
                       },
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Row 2: Manage Complaints & Verification Requests
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildActionButton('Manage Complaints', Icons.analytics, () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ComplaintsPage()),
+                      );
+                    }),
+                  ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: _buildActionButton(
-                      'Verification Requests',
+                      'Verify Requests',
                       Icons.verified_user,
                       () {
                         Navigator.push(
@@ -128,6 +94,37 @@ class AdminPanel extends StatelessWidget {
                         );
                       },
                     ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Row 3: Broadcasts & Logout
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildActionButton('Broadcasts', Icons.campaign, () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const BroadcastMessagesPage(),
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildActionButton('Logout', Icons.logout, () {
+                      // Ends this device's session on the server; any other
+                      // device signed in to the account stays signed in.
+                      Session.logout();
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(
+                          builder: (context) => const LoginScreen(),
+                        ),
+                        (route) => false,
+                      );
+                    }),
                   ),
                 ],
               ),

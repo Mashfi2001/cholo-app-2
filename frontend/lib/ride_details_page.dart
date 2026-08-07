@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -14,8 +14,9 @@ import 'package:intl/intl.dart';
 class DateFormatters {
   static String rideTime(dynamic value) {
     try {
-      return DateFormat('h:mm a, dd-MM-yyyy')
-          .format(DateTime.parse(value.toString()));
+      return DateFormat(
+        'h:mm a, dd-MM-yyyy',
+      ).format(DateTime.parse(value.toString()));
     } catch (_) {
       return "N/A";
     }
@@ -39,7 +40,7 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
   int gotTotalMoney = 0;
   List<Map<String, dynamic>> paidBreakdown = [];
   Timer? _seatPoll;
-  
+
   // New variables for passengers list
   List<Map<String, dynamic>> passengers = [];
   bool isLoadingPassengers = false;
@@ -78,14 +79,17 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
         seats = List<Map<String, dynamic>>.from(data["seats"] ?? []);
         final tf = data["totalFare"];
         if (tf != null) {
-          totalFare =
-              tf is num ? tf.ceil() : int.tryParse(tf.toString()) ?? 0;
+          totalFare = tf is num ? tf.ceil() : int.tryParse(tf.toString()) ?? 0;
         }
         final gm = data["gotTotalMoney"];
         if (gm != null) {
-          gotTotalMoney = gm is num ? gm.ceil() : int.tryParse(gm.toString()) ?? 0;
+          gotTotalMoney = gm is num
+              ? gm.ceil()
+              : int.tryParse(gm.toString()) ?? 0;
         }
-        paidBreakdown = List<Map<String, dynamic>>.from(data["paidBreakdown"] ?? []);
+        paidBreakdown = List<Map<String, dynamic>>.from(
+          data["paidBreakdown"] ?? [],
+        );
       });
     } catch (e) {
       if (!mounted) return;
@@ -101,19 +105,20 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
 
   Future<void> fetchPassengers() async {
     if (rideId == null) return;
-    
+
     setState(() {
       isLoadingPassengers = true;
     });
-    
+
     try {
       List<Map<String, dynamic>> allPassengers = [];
-      
+
       // 1. Get active passengers from seats (not paid yet)
       for (var seat in seats) {
-        final isBooked = seat["state"] == "BOOKED" || seat["state"] == "BOOKED_BY_ME";
+        final isBooked =
+            seat["state"] == "BOOKED" || seat["state"] == "BOOKED_BY_ME";
         final passenger = seat["passenger"];
-        
+
         if (isBooked && passenger != null) {
           bool exists = allPassengers.any((p) => p['id'] == passenger['id']);
           if (!exists) {
@@ -123,13 +128,13 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
               'email': passenger['email'] ?? 'No email',
               'seatNo': seat['seatNo'],
               'fare': seat['fare'] ?? 0,
-              'status': 'ACTIVE',  // Still in car, not paid
+              'status': 'ACTIVE', // Still in car, not paid
               'paymentStatus': 'PENDING',
             });
           }
         }
       }
-      
+
       // 2. Get paid passengers from paidBreakdown (already left)
       if (paidBreakdown.isNotEmpty) {
         for (var paid in paidBreakdown) {
@@ -138,22 +143,23 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
             allPassengers.add({
               'id': paid['userId'],
               'name': paid['passengerName'] ?? 'Unknown',
-              'email': 'N/A',  // Email not available in paidBreakdown
-              'seatNo': 'N/A',  // Seat info not available
+              'email': 'N/A', // Email not available in paidBreakdown
+              'seatNo': 'N/A', // Seat info not available
               'fare': paid['amount'] ?? 0,
-              'status': 'COMPLETED',  // Already left the car
+              'status': 'COMPLETED', // Already left the car
               'paymentStatus': 'PAID',
             });
           }
         }
       }
-      
+
       setState(() {
         passengers = allPassengers;
       });
-      
-      print("âœ… Loaded ${allPassengers.length} passengers (${allPassengers.where((p) => p['status'] == 'ACTIVE').length} active, ${allPassengers.where((p) => p['status'] == 'COMPLETED').length} completed)");
-      
+
+      print(
+        "âœ… Loaded ${allPassengers.length} passengers (${allPassengers.where((p) => p['status'] == 'ACTIVE').length} active, ${allPassengers.where((p) => p['status'] == 'COMPLETED').length} completed)",
+      );
     } catch (e) {
       print("Error loading passengers: $e");
     } finally {
@@ -169,8 +175,8 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
 
     final seatFare = seatData["fare"] != null
         ? (seatData["fare"] is num
-            ? (seatData["fare"] as num).toDouble()
-            : double.tryParse(seatData["fare"].toString()) ?? 0)
+              ? (seatData["fare"] as num).toDouble()
+              : double.tryParse(seatData["fare"].toString()) ?? 0)
         : 0.0;
 
     showDialog(
@@ -208,13 +214,18 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                 Text(
                   "Seat ${seatData["seatNo"]} Passenger",
                   style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w700),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const Divider(height: 24),
                 _buildDetailRow("Name", passenger["name"] ?? "N/A"),
                 _buildDetailRow("Email", passenger["email"] ?? "N/A"),
-                _buildDetailRow("Passenger ID", passenger["id"]?.toString() ?? "N/A"),
-                
+                _buildDetailRow(
+                  "Passenger ID",
+                  passenger["id"]?.toString() ?? "N/A",
+                ),
+
                 if (seatFare > 0) ...[
                   const SizedBox(height: 8),
                   Container(
@@ -227,8 +238,11 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.monetization_on_outlined, 
-                            color: Color(0xFF16A34A), size: 20),
+                        const Icon(
+                          Icons.monetization_on_outlined,
+                          color: Color(0xFF16A34A),
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           "Fare: ${seatFare.toStringAsFixed(2)} Taka",
@@ -240,7 +254,7 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                         ),
                       ],
                     ),
-                  )
+                  ),
                 ],
                 const SizedBox(height: 20),
                 Row(
@@ -253,11 +267,14 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                           foregroundColor: Colors.black87,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
-                        child: const Text("Close",
-                            style: TextStyle(fontWeight: FontWeight.w600)),
+                        child: const Text(
+                          "Close",
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -270,11 +287,14 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
-                        child: const Text("File Complaint",
-                            style: TextStyle(fontWeight: FontWeight.w600)),
+                        child: const Text(
+                          "File Complaint",
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
                     ),
                   ],
@@ -298,14 +318,20 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
             child: Text(
               title,
               style: TextStyle(
-                  fontSize: 13, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                fontSize: 13,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
           Expanded(
             child: Text(
               value,
               style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
             ),
           ),
         ],
@@ -318,7 +344,7 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
     final TextEditingController complaintController = TextEditingController();
     String severity = 'MEDIUM';
     bool isSubmitting = false;
-    
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -333,9 +359,18 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                     value: severity,
                     decoration: const InputDecoration(labelText: 'Severity'),
                     items: const [
-                      DropdownMenuItem(value: 'LOW', child: Text('Low - Minor issue')),
-                      DropdownMenuItem(value: 'MEDIUM', child: Text('Medium - Concerning')),
-                      DropdownMenuItem(value: 'HIGH', child: Text('High - Serious matter')),
+                      DropdownMenuItem(
+                        value: 'LOW',
+                        child: Text('Low - Minor issue'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'MEDIUM',
+                        child: Text('Medium - Concerning'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'HIGH',
+                        child: Text('High - Serious matter'),
+                      ),
                     ],
                     onChanged: (value) {
                       setState(() {
@@ -366,13 +401,15 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                       : () async {
                           if (complaintController.text.isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Please describe the complaint')),
+                              const SnackBar(
+                                content: Text('Please describe the complaint'),
+                              ),
                             );
                             return;
                           }
-                          
+
                           setState(() => isSubmitting = true);
-                          
+
                           try {
                             final response = await http.post(
                               Uri.parse('$backendUrl/api/complaints'),
@@ -388,19 +425,26 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                                 'severity': severity,
                               }),
                             );
-                            
+
                             if (response.statusCode == 201) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Complaint filed successfully! Admin will review it.'),
+                                  content: Text(
+                                    'Complaint filed successfully! Admin will review it.',
+                                  ),
                                   backgroundColor: Colors.green,
                                 ),
                               );
                             } else {
                               final error = jsonDecode(response.body);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(error['error'] ?? 'Failed to file complaint')),
+                                SnackBar(
+                                  content: Text(
+                                    error['error'] ??
+                                        'Failed to file complaint',
+                                  ),
+                                ),
                               );
                             }
                           } catch (e) {
@@ -411,14 +455,15 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                             setState(() => isSubmitting = false);
                           }
                         },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                   child: isSubmitting
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : const Text('Submit Complaint'),
                 ),
@@ -454,9 +499,9 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error ending ride: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error ending ride: $e')));
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -479,10 +524,13 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
             const Padding(
               padding: EdgeInsets.all(12.0),
               child: SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white)),
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
             )
           else
             IconButton(
@@ -504,8 +552,11 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
             _buildLegend(),
             const SizedBox(height: 8),
             if (totalSeats == 0 && !isLoading)
-              const Text("No seat data found",
-                  textAlign: TextAlign.center, style: TextStyle(color: Colors.grey))
+              const Text(
+                "No seat data found",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              )
             else
               _buildCarLayout(),
             const SizedBox(height: 24),
@@ -556,7 +607,10 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF98825).withOpacity(0.15),
                     borderRadius: BorderRadius.circular(12),
@@ -573,13 +627,11 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
               ],
             ),
           ),
-          
+
           if (isLoadingPassengers)
             const Padding(
               padding: EdgeInsets.all(32),
-              child: Center(
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             )
           else if (passengers.isEmpty)
             const Padding(
@@ -587,7 +639,11 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
               child: Center(
                 child: Column(
                   children: [
-                    Icon(Icons.person_off_outlined, size: 48, color: Colors.grey),
+                    Icon(
+                      Icons.person_off_outlined,
+                      size: 48,
+                      color: Colors.grey,
+                    ),
                     SizedBox(height: 8),
                     Text(
                       "No passengers have booked this ride yet",
@@ -602,11 +658,8 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: passengers.length,
-              separatorBuilder: (context, index) => Divider(
-                height: 0,
-                color: Colors.grey.shade200,
-                thickness: 1,
-              ),
+              separatorBuilder: (context, index) =>
+                  Divider(height: 0, color: Colors.grey.shade200, thickness: 1),
               itemBuilder: (context, index) {
                 final passenger = passengers[index];
                 return _buildPassengerTile(passenger);
@@ -620,7 +673,7 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
   Widget _buildPassengerTile(Map<String, dynamic> passenger) {
     final bool isActive = passenger['status'] == 'ACTIVE';
     final bool hasPaid = passenger['paymentStatus'] == 'PAID';
-    
+
     return InkWell(
       onTap: () => _showPassengerDetailsDialog(passenger),
       child: Padding(
@@ -631,7 +684,7 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: isActive 
+                color: isActive
                     ? const Color(0xFFF98825).withOpacity(0.1)
                     : Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(12),
@@ -642,13 +695,15 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: isActive ? const Color(0xFFF98825) : Colors.grey.shade600,
+                    color: isActive
+                        ? const Color(0xFFF98825)
+                        : Colors.grey.shade600,
                   ),
                 ),
               ),
             ),
             const SizedBox(width: 12),
-            
+
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -660,13 +715,18 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
-                          color: isActive ? Colors.black87 : Colors.grey.shade600,
+                          color: isActive
+                              ? Colors.black87
+                              : Colors.grey.shade600,
                         ),
                       ),
                       const SizedBox(width: 8),
                       if (isActive)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.green.shade100,
                             borderRadius: BorderRadius.circular(10),
@@ -682,7 +742,10 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                         ),
                       if (!isActive)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.blue.shade100,
                             borderRadius: BorderRadius.circular(10),
@@ -701,20 +764,33 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(Icons.attach_money, size: 12, color: Colors.grey.shade500),
+                      Icon(
+                        Icons.attach_money,
+                        size: 12,
+                        color: Colors.grey.shade500,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         'Fare: ${passenger['fare']} Taka',
-                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                       const SizedBox(width: 12),
-                      Icon(Icons.confirmation_number, size: 12, color: Colors.grey.shade500),
+                      Icon(
+                        Icons.confirmation_number,
+                        size: 12,
+                        color: Colors.grey.shade500,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         passenger['paymentStatus'],
                         style: TextStyle(
-                          fontSize: 11, 
-                          color: hasPaid ? Colors.green.shade700 : Colors.orange.shade700,
+                          fontSize: 11,
+                          color: hasPaid
+                              ? Colors.green.shade700
+                              : Colors.orange.shade700,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -723,7 +799,7 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                 ],
               ),
             ),
-            
+
             // Chat and Complaint Buttons
             Row(
               children: [
@@ -735,19 +811,28 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                         MaterialPageRoute(
                           builder: (context) => RideChatPage(
                             rideId: rideId!,
-                            rideTitle: '${widget.ride['origin']} to ${widget.ride['destination']}',
+                            rideTitle:
+                                '${widget.ride['origin']} to ${widget.ride['destination']}',
                             otherUserId: passenger['id'],
                             otherUserName: passenger['name'],
                           ),
                         ),
                       );
                     },
-                    icon: const Icon(Icons.chat_bubble_outline, size: 20, color: Color(0xFFF98825)),
+                    icon: const Icon(
+                      Icons.chat_bubble_outline,
+                      size: 20,
+                      color: Color(0xFFF98825),
+                    ),
                     tooltip: "Chat with ${passenger['name']}",
                   ),
                 IconButton(
                   onPressed: () => _showPassengerDetailsDialog(passenger),
-                  icon: const Icon(Icons.info_outline, size: 20, color: Colors.blue),
+                  icon: const Icon(
+                    Icons.info_outline,
+                    size: 20,
+                    color: Colors.blue,
+                  ),
                   tooltip: "Details",
                 ),
               ],
@@ -763,7 +848,9 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
       context: context,
       builder: (BuildContext context) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Container(
             padding: const EdgeInsets.all(20),
             width: double.infinity,
@@ -805,7 +892,10 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                           ),
                           Text(
                             passenger['email'] ?? 'No email provided',
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
                           ),
                         ],
                       ),
@@ -814,10 +904,26 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                 ),
                 const SizedBox(height: 20),
                 const Divider(),
-                _buildPassengerDetailRow(Icons.phone, 'Phone', passenger['phone'] ?? 'N/A'),
-                _buildPassengerDetailRow(Icons.location_on, 'Pickup Point', passenger['pickupPoint'] ?? 'N/A'),
-                _buildPassengerDetailRow(Icons.attach_money, 'Payment Status', passenger['paymentStatus'] ?? 'PENDING'),
-                _buildPassengerDetailRow(Icons.confirmation_number, 'Booking Status', passenger['bookingStatus'] ?? 'PENDING'),
+                _buildPassengerDetailRow(
+                  Icons.phone,
+                  'Phone',
+                  passenger['phone'] ?? 'N/A',
+                ),
+                _buildPassengerDetailRow(
+                  Icons.location_on,
+                  'Pickup Point',
+                  passenger['pickupPoint'] ?? 'N/A',
+                ),
+                _buildPassengerDetailRow(
+                  Icons.attach_money,
+                  'Payment Status',
+                  passenger['paymentStatus'] ?? 'PENDING',
+                ),
+                _buildPassengerDetailRow(
+                  Icons.confirmation_number,
+                  'Booking Status',
+                  passenger['bookingStatus'] ?? 'PENDING',
+                ),
                 const SizedBox(height: 20),
                 Row(
                   children: [
@@ -884,7 +990,7 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
   }
 
   // ... (keep all your existing UI methods: _buildRouteInfoCard, _routePoint, _statusBadge, _infoChip, _buildEarningsCard, _showGotMoneyBreakdown, _buildLegend, _legendDot, _buildCarLayout, _lightDot, _buildDriverTile, _buildSeatTile)
-  
+
   // I'll include the rest of your existing methods here...
   Widget _buildRouteInfoCard() {
     return Container(
@@ -895,9 +1001,10 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4)),
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Column(
@@ -906,9 +1013,13 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("Ride #${widget.ride['id']}",
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w800, fontSize: 16)),
+              Text(
+                "Ride #${widget.ride['id']}",
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                ),
+              ),
               _statusBadge(widget.ride['status']?.toString() ?? 'UNKNOWN'),
             ],
           ),
@@ -919,7 +1030,11 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
             child: Column(
               children: [
                 Container(width: 2, height: 20, color: const Color(0xFFF98825)),
-                Icon(Icons.keyboard_arrow_down_rounded, color: const Color(0xFFF98825), size: 16),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: const Color(0xFFF98825),
+                  size: 16,
+                ),
                 Container(width: 2, height: 20, color: const Color(0xFFF98825)),
               ],
             ),
@@ -930,21 +1045,18 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
             children: [
               _infoChip(
                 Icons.route,
-                "${(widget.ride['routeDistanceKm'] is num
-                    ? (widget.ride['routeDistanceKm'] as num).toDouble()
-                    : double.tryParse(widget.ride['routeDistanceKm'].toString()) ?? 0)
-                    .toStringAsFixed(2)} km   ",
+                "${(widget.ride['routeDistanceKm'] is num ? (widget.ride['routeDistanceKm'] as num).toDouble() : double.tryParse(widget.ride['routeDistanceKm'].toString()) ?? 0).toStringAsFixed(2)} km   ",
               ),
               _infoChip(
                 Icons.schedule,
-                "${(widget.ride['routeDurationMin'] is num
-                    ? (widget.ride['routeDurationMin'] as num).toDouble()
-                    : double.tryParse(widget.ride['routeDurationMin'].toString()) ?? 0)
-                    .toStringAsFixed(2)} min   ",
+                "${(widget.ride['routeDurationMin'] is num ? (widget.ride['routeDurationMin'] as num).toDouble() : double.tryParse(widget.ride['routeDurationMin'].toString()) ?? 0).round()} min   ",
               ),
-              _infoChip(Icons.event, DateFormatters.rideTime(widget.ride['departureTime'])),
+              _infoChip(
+                Icons.event,
+                DateFormatters.rideTime(widget.ride['departureTime']),
+              ),
             ],
-          )
+          ),
         ],
       ),
     );
@@ -994,9 +1106,14 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
         color: bgColor,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(status,
-          style: TextStyle(
-              color: textColor, fontWeight: FontWeight.w700, fontSize: 11)),
+      child: Text(
+        status,
+        style: TextStyle(
+          color: textColor,
+          fontWeight: FontWeight.w700,
+          fontSize: 11,
+        ),
+      ),
     );
   }
 
@@ -1006,18 +1123,22 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
       children: [
         Icon(icon, size: 16, color: Colors.grey.shade600),
         const SizedBox(width: 4),
-        Text(text,
-            style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade700,
-                fontWeight: FontWeight.w500)),
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey.shade700,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ],
     );
   }
 
   Widget _buildEarningsCard() {
-    final bookedCount = seats.where((s) => 
-        s["state"] == "BOOKED" || s["state"] == "BOOKED_BY_ME").length;
+    final bookedCount = seats
+        .where((s) => s["state"] == "BOOKED" || s["state"] == "BOOKED_BY_ME")
+        .length;
 
     return GestureDetector(
       onTap: _showGotMoneyBreakdown,
@@ -1047,31 +1168,43 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                 color: Colors.white.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.account_balance_wallet,
-                  color: Colors.white, size: 22),
+              child: const Icon(
+                Icons.account_balance_wallet,
+                color: Colors.white,
+                size: 22,
+              ),
             ),
             const SizedBox(width: 14),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Estimated Earnings",
-                    style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500)),
+                const Text(
+                  "Due Earnings",
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text("$totalFare Taka",
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5)),
+                Text(
+                  "$totalFare Taka",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text("Got money: $gotTotalMoney Taka",
-                    style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600)),
+                Text(
+                  "Got money: $gotTotalMoney Taka",
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
             const Spacer(),
@@ -1081,12 +1214,15 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                 color: Colors.white.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text("$bookedCount/${widget.ride['seats']} Booked",
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12)),
-            )
+              child: Text(
+                "$bookedCount/${widget.ride['seats']} Booked",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1108,14 +1244,18 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                   separatorBuilder: (_, __) => const Divider(height: 12),
                   itemBuilder: (_, i) {
                     final item = paidBreakdown[i];
-                    final name = item["passengerName"]?.toString() ?? "Passenger";
+                    final name =
+                        item["passengerName"]?.toString() ?? "Passenger";
                     final amount = item["amount"] is num
                         ? (item["amount"] as num).toInt()
                         : int.tryParse(item["amount"]?.toString() ?? "0") ?? 0;
                     return Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        Text(
+                          name,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         Text("$amount Tk"),
                       ],
                     );
@@ -1123,7 +1263,10 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                 ),
               ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Close"),
+          ),
         ],
       ),
     );
@@ -1137,8 +1280,14 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
         const SizedBox(width: 14),
         _legendDot(const Color(0xFF3B82F6), "Booked"),
         const SizedBox(width: 14),
-        const Text("Tap booked seats for info",
-            style: TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic)),
+        const Text(
+          "Tap booked seats for info",
+          style: TextStyle(
+            fontSize: 11,
+            color: Colors.grey,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
       ],
     );
   }
@@ -1153,13 +1302,20 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(3),
-            border: border ? Border.all(color: Colors.grey.shade400, width: 1.2) : null,
+            border: border
+                ? Border.all(color: Colors.grey.shade400, width: 1.2)
+                : null,
           ),
         ),
         const SizedBox(width: 4),
-        Text(label,
-            style: const TextStyle(
-                fontSize: 11, color: Colors.black54, fontWeight: FontWeight.w500)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            color: Colors.black54,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ],
     );
   }
@@ -1183,10 +1339,7 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
         backRowWidgets.add(const SizedBox(height: 14));
       }
       backRowWidgets.add(
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: rowSeats,
-        ),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: rowSeats),
       );
       remaining -= inThisRow;
     }
@@ -1228,12 +1381,15 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                     border: Border.all(color: const Color(0xFFBAE6FD)),
                   ),
                   child: const Center(
-                    child: Text("FRONT",
-                        style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF7DD3FC),
-                            letterSpacing: 3)),
+                    child: Text(
+                      "FRONT",
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF7DD3FC),
+                        letterSpacing: 3,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 22),
@@ -1250,16 +1406,19 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
                   const SizedBox(height: 6),
                   const Align(
                     alignment: Alignment.centerRight,
-                    child: Text("BACK",
-                        style: TextStyle(
-                            fontSize: 8,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFFBDBDBD),
-                            letterSpacing: 2)),
+                    child: Text(
+                      "BACK",
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFBDBDBD),
+                        letterSpacing: 2,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Column(children: backRowWidgets),
-                ]
+                ],
               ],
             ),
           ),
@@ -1280,7 +1439,10 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
       width: 8,
       height: 8,
       decoration: BoxDecoration(
-          color: fill, shape: BoxShape.circle, border: Border.all(color: stroke)),
+        color: fill,
+        shape: BoxShape.circle,
+        border: Border.all(color: stroke),
+      ),
     );
   }
 
@@ -1298,9 +1460,14 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
         children: [
           Icon(Icons.drive_eta_rounded, size: 18, color: Color(0xFFF98825)),
           SizedBox(height: 2),
-          Text("You",
-              style: TextStyle(
-                  fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFFF98825))),
+          Text(
+            "You",
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFFF98825),
+            ),
+          ),
         ],
       ),
     );
@@ -1312,7 +1479,8 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
       orElse: () => {"seatNo": seatNo, "state": "AVAILABLE", "passenger": null},
     );
 
-    final isBooked = seatData["state"] == "BOOKED" || seatData["state"] == "BOOKED_BY_ME";
+    final isBooked =
+        seatData["state"] == "BOOKED" || seatData["state"] == "BOOKED_BY_ME";
 
     Color bgColor;
     Color textColor;
@@ -1324,9 +1492,10 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
       textColor = Colors.white;
       shadow = [
         BoxShadow(
-            color: const Color(0xFF3B82F6).withOpacity(0.25),
-            blurRadius: 8,
-            offset: const Offset(0, 3)),
+          color: const Color(0xFF3B82F6).withOpacity(0.25),
+          blurRadius: 8,
+          offset: const Offset(0, 3),
+        ),
       ];
     } else {
       bgColor = Colors.white;
@@ -1351,7 +1520,10 @@ class _RideDetailsPageState extends State<RideDetailsPage> {
         child: Text(
           "$seatNo",
           style: TextStyle(
-              fontSize: 15, fontWeight: FontWeight.w700, color: textColor),
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: textColor,
+          ),
         ),
       ),
     );
